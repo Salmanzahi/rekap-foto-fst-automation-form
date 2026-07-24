@@ -17,10 +17,11 @@ export interface PhotoData {
 }
 
 export interface SubmitDataPayload {
-  action: 'submit';
+  action: 'submit' | 'update';
   name: string;
   fields: Record<string, string>;
   photos?: PhotoData[];
+  rowIndex?: number;
 }
 
 export interface SubmitResponse {
@@ -31,6 +32,16 @@ export interface SubmitResponse {
 
 export interface CheckSubmissionResponse {
   submitted: boolean;
+}
+
+export interface ExistingSubmissionResponse {
+  submitted: boolean;
+  data?: Record<string, string>;
+  rowIndex?: number;
+}
+
+export interface ResponseNamesResponse {
+  names: string[];
 }
 
 export interface ApiError {
@@ -86,18 +97,75 @@ export async function checkSubmission(name: string): Promise<boolean> {
 }
 
 /**
+ * Fetch existing submission data for a participant from the Response spreadsheet.
+ * Returns the existing row data + row index if found, or { submitted: false } if not.
+ */
+export async function fetchExistingSubmission(name: string): Promise<ExistingSubmissionResponse> {
+  const response = await fetch(`/api/participants?action=getSubmission&name=${encodeURIComponent(name)}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    // If the backend doesn't support this action yet, treat as not submitted
+    const errData = await response.json().catch(() => null);
+    console.warn('fetchExistingSubmission error:', errData?.error);
+    return { submitted: false };
+  }
+
+  const data: ExistingSubmissionResponse | ApiError = await response.json();
+
+  if ('error' in data) {
+    console.warn('fetchExistingSubmission error:', data.error);
+    return { submitted: false };
+  }
+
+  return data;
+}
+
+/**
+ * Fetch all names from the Response spreadsheet.
+ * Used for autocomplete in manual name entry.
+ */
+export async function fetchResponseNames(): Promise<string[]> {
+  const response = await fetch('/api/participants?action=getResponseNames', {
+    method: 'GET',
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    console.warn('fetchResponseNames failed');
+    return [];
+  }
+
+  const data: ResponseNamesResponse | ApiError = await response.json();
+
+  if ('error' in data) {
+    console.warn('fetchResponseNames error:', data.error);
+    return [];
+  }
+
+  return data.names || [];
+}
+
+/**
  * Submit participant data + photos via local Next.js API proxy (/api/submit).
+ * When rowIndex is provided, sends an 'update' action to update an existing row.
  */
 export async function submitData(
   name: string,
   fields: Record<string, string>,
-  photos?: PhotoData[]
+  photos?: PhotoData[],
+  rowIndex?: number
 ): Promise<SubmitResponse> {
+  const isUpdate = rowIndex !== undefined && rowIndex !== null;
+
   const payload: SubmitDataPayload = {
-    action: 'submit',
+    action: isUpdate ? 'update' : 'submit',
     name,
     fields,
     photos,
+    ...(isUpdate ? { rowIndex } : {}),
   };
 
   const response = await fetch('/api/submit', {

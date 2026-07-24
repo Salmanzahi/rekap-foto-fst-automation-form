@@ -6,7 +6,7 @@ import type { MasterParticipant } from '../lib/config';
 interface NameSearchProps {
   participants: MasterParticipant[];
   onSelect: (participant: MasterParticipant) => void;
-  onSkip: () => void;
+  onSkip: (searchQuery?: string) => void;
   disabled?: boolean;
 }
 
@@ -225,33 +225,38 @@ export default function NameSearch({
               +{filtered.length - 50} nama lainnya, ketik lebih spesifik...
             </li>
           )}
+          <li
+            className="search-dropdown-item search-dropdown-skip"
+            onClick={() => {
+              setIsOpen(false);
+              onSkip(query.trim());
+            }}
+          >
+            <div className="dropdown-item-name skip-item-text">
+              ➕ Nama kamu tidak ada di daftar? Lanjut isi manual &quot;{query}&quot; →
+            </div>
+          </li>
         </ul>
       )}
 
-      {query.trim().length >= 1 &&
-        filtered.length === 0 &&
-        !isOpen && (
-          <p className="search-no-results">
-            Tidak ada nama yang cocok dengan &quot;{query}&quot;
-          </p>
-        )}
-
-      {/* Skip button — nama tidak ada di Master */}
-      <div className="search-skip-section">
-        <div className="search-divider">
-          <span className="search-divider-line" />
-          <span className="search-divider-text">atau</span>
-          <span className="search-divider-line" />
+      {/* Manual entry option — ONLY shown when user has typed a query and no matching names are found */}
+      {query.trim().length >= 1 && filtered.length === 0 && (
+        <div className="search-skip-section fade-in">
+          <div className="no-results-card">
+            <p className="search-no-results">
+              Tidak ada nama yang cocok dengan <strong>&quot;{query}&quot;</strong> di daftar rekap FST
+            </p>
+            <button
+              type="button"
+              className="btn-skip"
+              onClick={() => onSkip(query.trim())}
+              disabled={disabled}
+            >
+              Lanjut isi data manual dengan nama ini →
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          className="btn-skip"
-          onClick={onSkip}
-          disabled={disabled}
-        >
-          Nama saya tidak ada di daftar → Lanjut isi manual
-        </button>
-      </div>
+      )}
     </div>
   );
 }

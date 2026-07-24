@@ -3,11 +3,19 @@ import { APPS_SCRIPT_URL } from '@/app/lib/config';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || APPS_SCRIPT_URL;
 
   try {
-    const targetUrl = `${appsScriptUrl}?action=getParticipants`;
+    // Forward query parameters (action, name) to Apps Script
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action') || 'getParticipants';
+    const name = searchParams.get('name');
+
+    let targetUrl = `${appsScriptUrl}?action=${encodeURIComponent(action)}`;
+    if (name) {
+      targetUrl += `&name=${encodeURIComponent(name)}`;
+    }
     const res = await fetch(targetUrl, {
       method: 'GET',
       headers: {

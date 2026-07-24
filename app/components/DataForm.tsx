@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { FORM_FIELDS, type FormField, type MasterParticipant } from '../lib/config';
+import ProdiSelect from './ProdiSelect';
+import { normalizeProdi } from '../lib/prodi';
 
 interface DataFormProps {
   selectedName: string;
@@ -10,6 +12,11 @@ interface DataFormProps {
   onBack: () => void;
   isSubmitting: boolean;
   isFromMaster: boolean;
+  existingData?: Record<string, string> | null;
+  isUpdateMode?: boolean;
+  onCheckExisting?: (name: string) => void;
+  isCheckingExisting?: boolean;
+  responseNames?: string[];
 }
 
 export default function DataForm({
@@ -19,26 +26,49 @@ export default function DataForm({
   onBack,
   isSubmitting,
   isFromMaster,
+  existingData,
+  isUpdateMode,
+  onCheckExisting,
+  isCheckingExisting,
+  responseNames,
 }: DataFormProps) {
   const [name, setName] = useState(selectedName);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Initialize form with pre-filled data from Master
+  // Autocomplete state for manual name entry
+  const [nameQuery, setNameQuery] = useState('');
+  const [filteredNames, setFilteredNames] = useState<string[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [lastCheckedName, setLastCheckedName] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameContainerRef = useRef<HTMLDivElement>(null);
+  const nameListRef = useRef<HTMLUListElement>(null);
+
+  // Initialize form with pre-filled data from existing submission or Master
   useEffect(() => {
     const initial: Record<string, string> = {};
     FORM_FIELDS.forEach((field) => {
-      if (field.prefillFromMaster && masterData && masterData[field.prefillFromMaster]) {
-        initial[field.name] = masterData[field.prefillFromMaster];
+      let val = '';
+      // Priority: existingData > masterData > default
+      if (existingData && existingData[field.name]) {
+        val = existingData[field.name];
+      } else if (field.prefillFromMaster && masterData && masterData[field.prefillFromMaster]) {
+        val = masterData[field.prefillFromMaster];
       } else if (field.type === 'toggle') {
-        initial[field.name] = 'FALSE';
-      } else {
-        initial[field.name] = '';
+        val = 'FALSE';
       }
+
+      if (field.name === 'Prodi' && val) {
+        val = normalizeProdi(val);
+      }
+      initial[field.name] = val;
     });
     setFormData(initial);
     setName(selectedName);
-  }, [masterData, selectedName]);
+    setNameQuery(selectedName);
+  }, [masterData, selectedName, existingData]);
 
   const validateField = (field: FormField, value: string): string | null => {
     if (field.required && !value.trim()) {
@@ -100,6 +130,55 @@ export default function DataForm({
     onSubmit(name.trim(), formData);
   };
 
+  // Handle selecting a name from the response names dropdown
+  const handleSelectResponseName = useCallback((selectedResponseName: string) => {
+    setName(selectedResponseName);
+    setNameQuery(selectedResponseName);
+    setIsDropdownOpen(false);
+    setFilteredNames([]);
+    setHighlightIdx(-1);
+    // Auto-check immediately
+    if (onCheckExisting && selectedResponseName.trim() !== lastCheckedName) {
+      setLastCheckedName(selectedResponseName.trim());
+      onCheckExisting(selectedResponseName.trim());
+    }
+  }, [onCheckExisting, lastCheckedName]);
+
+  // Highlight matching text in dropdown
+  const highlightNameMatch = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase().trim());
+    if (idx === -1) return text;
+    const before = text.slice(0, idx);
+    const match = text.slice(idx, idx + query.trim().length);
+    const after = text.slice(idx + query.trim().length);
+    return (
+      <>
+        {before}
+        <span className="search-highlight">{match}</span>
+        {after}
+      </>
+    );
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (nameContainerRef.current && !nameContainerRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const showFotoUpload = formData['Apakah sudah Foto Bareng'] === 'TRUE';
 
   const renderField = (field: FormField) => {
@@ -109,6 +188,7 @@ export default function DataForm({
       field.prefillFromMaster &&
       masterData &&
       !!masterData[field.prefillFromMaster];
+    const isFromExisting = !!(isUpdateMode && existingData && existingData[field.name]);
 
     if (field.type === 'toggle') {
       const isChecked = formData[field.name] === 'TRUE';
@@ -142,7 +222,8 @@ export default function DataForm({
           <label htmlFor={`field-${field.name}`} className="field-label">
             {field.label}
             {field.required && <span className="required-mark">*</span>}
-            {isPrefilled && <span className="prefilled-badge">dari data master</span>}
+            {isFromExisting && <span className="prefilled-badge update-badge">data sebelumnya</span>}
+            {!isFromExisting && isPrefilled && <span className="prefilled-badge">dari data rekap FST</span>}
           </label>
           <select
             id={`field-${field.name}`}
@@ -169,7 +250,8 @@ export default function DataForm({
           <label htmlFor={`field-${field.name}`} className="field-label">
             {field.label}
             {field.required && <span className="required-mark">*</span>}
-            {isPrefilled && <span className="prefilled-badge">dari data master</span>}
+            {isFromExisting && <span className="prefilled-badge update-badge">data sebelumnya</span>}
+            {!isFromExisting && isPrefilled && <span className="prefilled-badge">dari data rekap FST</span>}
           </label>
           <textarea
             id={`field-${field.name}`}
@@ -188,18 +270,43 @@ export default function DataForm({
       );
     }
 
+    if (field.name === 'Prodi') {
+      return (
+        <div key={field.name} className="form-group">
+          <label htmlFor={`field-${field.name}`} className="field-label">
+            {field.label}
+            {field.required && <span className="required-mark">*</span>}
+            {isFromExisting && <span className="prefilled-badge update-badge">data sebelumnya</span>}
+            {!isFromExisting && isPrefilled && <span className="prefilled-badge">dari data rekap FST</span>}
+          </label>
+          <ProdiSelect
+            value={formData[field.name] || ''}
+            onChange={(val) => handleChange(field.name, val)}
+            disabled={isSubmitting}
+            hasError={hasError}
+            placeholder={field.placeholder || 'Pilih / ketik Prodi (misal: sisfor, tekling)...'}
+          />
+          {field.helperText && !hasError && (
+            <p className="helper-text">{field.helperText}</p>
+          )}
+          {hasError && <p className="error-text">{errors[field.name]}</p>}
+        </div>
+      );
+    }
+
     // Default: text, tel, email
     return (
       <div key={field.name} className="form-group">
         <label htmlFor={`field-${field.name}`} className="field-label">
           {field.label}
           {field.required && <span className="required-mark">*</span>}
-          {isPrefilled && <span className="prefilled-badge">dari data master</span>}
+          {isFromExisting && <span className="prefilled-badge update-badge">data sebelumnya</span>}
+          {!isFromExisting && isPrefilled && <span className="prefilled-badge">dari data rekap FST</span>}
         </label>
         <input
           id={`field-${field.name}`}
           type={field.type}
-          className={`form-input ${hasError ? 'field-error' : ''} ${isPrefilled ? 'prefilled' : ''}`}
+          className={`form-input ${hasError ? 'field-error' : ''} ${isPrefilled || isFromExisting ? 'prefilled' : ''}`}
           placeholder={field.placeholder}
           value={formData[field.name]}
           onChange={(e) => handleChange(field.name, e.target.value)}
@@ -215,6 +322,20 @@ export default function DataForm({
 
   return (
     <div className="data-form-container">
+      {/* Update mode banner */}
+      {isUpdateMode && (
+        <div className="update-banner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg>
+          <div className="update-banner-text">
+            <strong>Data kamu sudah pernah disubmit.</strong>
+            <span>Kamu bisa memperbarui data di bawah ini.</span>
+          </div>
+        </div>
+      )}
+
       {/* Name banner / input */}
       {isFromMaster ? (
         <div className="selected-name-banner">
@@ -241,30 +362,122 @@ export default function DataForm({
               <circle cx="12" cy="12" r="10" />
               <path d="M12 16v-4M12 8h.01" />
             </svg>
-            <span>Nama kamu tidak ada di daftar Master. Silakan isi manual.</span>
+            <span>Yuk, isi biodatamu di bawah ini!</span>
           </div>
-          <div className="form-group">
+          <div className="form-group" ref={nameContainerRef}>
             <label htmlFor="manual-name" className="field-label">
               Nama Lengkap <span className="required-mark">*</span>
             </label>
-            <input
-              id="manual-name"
-              type="text"
-              className={`form-input ${errors['_name'] ? 'field-error' : ''}`}
-              placeholder="Masukkan nama lengkap..."
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (errors['_name']) {
-                  setErrors((prev) => {
-                    const next = { ...prev };
-                    delete next['_name'];
-                    return next;
-                  });
-                }
-              }}
-              disabled={isSubmitting}
-            />
+            <div className="manual-name-input-row">
+              <input
+                id="manual-name"
+                type="text"
+                className={`form-input ${errors['_name'] ? 'field-error' : ''}`}
+                placeholder="Ketik nama untuk mencari..."
+                value={name}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setName(val);
+                  setNameQuery(val);
+                  if (errors['_name']) {
+                    setErrors((prev) => {
+                      const next = { ...prev };
+                      delete next['_name'];
+                      return next;
+                    });
+                  }
+                  // Filter response names for dropdown
+                  if (val.trim().length >= 2 && responseNames && responseNames.length > 0) {
+                    const q = val.toLowerCase().trim();
+                    const matches = responseNames.filter(n => n.toLowerCase().includes(q));
+                    setFilteredNames(matches);
+                    setIsDropdownOpen(matches.length > 0);
+                    setHighlightIdx(-1);
+                  } else {
+                    setFilteredNames([]);
+                    setIsDropdownOpen(false);
+                  }
+                  // Debounced auto-check
+                  if (debounceRef.current) clearTimeout(debounceRef.current);
+                  if (val.trim().length >= 3 && onCheckExisting) {
+                    debounceRef.current = setTimeout(() => {
+                      if (val.trim() !== lastCheckedName) {
+                        setLastCheckedName(val.trim());
+                        onCheckExisting(val.trim());
+                      }
+                    }, 800);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (!isDropdownOpen) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setHighlightIdx(prev => prev < filteredNames.length - 1 ? prev + 1 : 0);
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setHighlightIdx(prev => prev > 0 ? prev - 1 : filteredNames.length - 1);
+                  } else if (e.key === 'Enter' && highlightIdx >= 0) {
+                    e.preventDefault();
+                    handleSelectResponseName(filteredNames[highlightIdx]);
+                  } else if (e.key === 'Escape') {
+                    setIsDropdownOpen(false);
+                  }
+                }}
+                onFocus={() => {
+                  if (filteredNames.length > 0) setIsDropdownOpen(true);
+                }}
+                disabled={isSubmitting || isCheckingExisting}
+                autoComplete="off"
+                role="combobox"
+                aria-expanded={isDropdownOpen}
+                aria-controls="response-name-listbox"
+              />
+              {isCheckingExisting && (
+                <div className="btn-check-existing checking">
+                  <span className="btn-loading">
+                    <span className="spinner" />
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Autocomplete dropdown */}
+            {isDropdownOpen && filteredNames.length > 0 && (
+              <ul
+                ref={nameListRef}
+                id="response-name-listbox"
+                className="search-dropdown response-name-dropdown"
+                role="listbox"
+              >
+                <li className="response-dropdown-header">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  Ditemukan di spreadsheet ({filteredNames.length})
+                </li>
+                {filteredNames.slice(0, 20).map((rName, idx) => (
+                  <li
+                    key={`resp-${idx}`}
+                    className={`search-dropdown-item ${idx === highlightIdx ? 'highlighted' : ''}`}
+                    role="option"
+                    aria-selected={idx === highlightIdx}
+                    onClick={() => handleSelectResponseName(rName)}
+                    onMouseEnter={() => setHighlightIdx(idx)}
+                  >
+                    <div className="dropdown-item-name">
+                      {highlightNameMatch(rName, nameQuery)}
+                    </div>
+                  </li>
+                ))}
+                {filteredNames.length > 20 && (
+                  <li className="search-dropdown-more">
+                    +{filteredNames.length - 20} nama lainnya, ketik lebih spesifik...
+                  </li>
+                )}
+              </ul>
+            )}
+
             {errors['_name'] && (
               <p className="error-text">{errors['_name']}</p>
             )}
@@ -282,7 +495,9 @@ export default function DataForm({
       )}
 
       <form onSubmit={handleSubmit} className="data-form">
-        <h3 className="form-title">Lengkapi Data Kamu</h3>
+        <h3 className="form-title">
+          {isUpdateMode ? 'Perbarui Data Kamu' : 'Lengkapi Data Kamu'}
+        </h3>
 
         {FORM_FIELDS.map(renderField)}
 
@@ -302,10 +517,12 @@ export default function DataForm({
           {isSubmitting ? (
             <span className="btn-loading">
               <span className="spinner" />
-              Mengirim...
+              {isUpdateMode ? 'Memperbarui...' : 'Mengirim...'}
             </span>
           ) : showFotoUpload ? (
             'Lanjut ke Upload Foto →'
+          ) : isUpdateMode ? (
+            '✏️ Perbarui Data'
           ) : (
             'Kirim Data'
           )}

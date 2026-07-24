@@ -4,13 +4,23 @@
 
 // Google Apps Script Web App URL
 export const APPS_SCRIPT_URL =
-  process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzWLv3hJkWPnzGLHeDld6CY4_M-LtuZ_eH0Y49Fm5BpRdts6uE-OniU-8OXl4fifii8jQ/exec'
+  process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycby_lFxNFV-n6_U3_VOPFVKZUt4O8i9oA4P5-fC1_36LfoSXdSKI2v2jajr6MwKerkVc9w/exec'
 // Event / kegiatan info
 export const EVENT_INFO = {
   title: 'Rekap Foto FST',
   subtitle: 'Formulir Data Peserta',
   description: 'Silakan cari nama kamu, lalu lengkapi data yang diminta.',
   organization: 'FST',
+};
+
+// Owner / Creator Info
+export const OWNER_INFO = {
+  name: 'Salman Zahi Muhajirin',
+  prodi: 'Sistem Informasi',
+  kelompok: '32',
+  asalDaerah: 'Surabaya',
+  motto: 'F = ma',
+  phone: process.env.NEXT_PUBLIC_OWNER_WA || '089509542780',
 };
 
 // ============================================

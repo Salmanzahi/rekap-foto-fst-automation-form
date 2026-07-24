@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { EVENT_INFO, type MasterParticipant } from './lib/config';
-import { fetchParticipants, submitData } from './lib/api';
+import { fetchParticipants, fetchExistingSubmission, fetchResponseNames, submitData } from './lib/api';
 import NameSearch from './components/NameSearch';
 import DataForm from './components/DataForm';
 import PhotoUpload from './components/PhotoUpload';
@@ -21,6 +21,13 @@ export default function Home() {
   const [selectedMasterData, setSelectedMasterData] = useState<MasterParticipant | null>(null);
   const [isFromMaster, setIsFromMaster] = useState(false);
 
+  // Existing submission data (for update mode)
+  const [existingData, setExistingData] = useState<Record<string, string> | null>(null);
+  const [existingRowIndex, setExistingRowIndex] = useState<number | undefined>(undefined);
+  const [isUpdateMode, setIsUpdateMode] = useState(false);
+  const [isCheckingSubmission, setIsCheckingSubmission] = useState(false);
+  const [isCheckingExisting, setIsCheckingExisting] = useState(false);
+
   // Form data
   const [formFields, setFormFields] = useState<Record<string, string>>({});
 
@@ -32,6 +39,9 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+
+  // Response spreadsheet names (for manual entry autocomplete)
+  const [responseNames, setResponseNames] = useState<string[]>([]);
 
   // Fetch participants on mount
   useEffect(() => {
@@ -66,22 +76,96 @@ export default function Home() {
     };
   }, []);
 
+  // Fetch response names on mount (for manual entry autocomplete)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadResponseNames() {
+      try {
+        const names = await fetchResponseNames();
+        if (!cancelled) setResponseNames(names);
+      } catch {
+        // Non-critical — autocomplete just won't have data
+      }
+    }
+    loadResponseNames();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Check for existing submission and proceed to form
+  const checkAndProceed = useCallback(async (name: string) => {
+    setIsCheckingSubmission(true);
+    try {
+      const result = await fetchExistingSubmission(name);
+      if (result.submitted && result.data) {
+        setExistingData(result.data);
+        setExistingRowIndex(result.rowIndex);
+        setIsUpdateMode(true);
+      } else {
+        setExistingData(null);
+        setExistingRowIndex(undefined);
+        setIsUpdateMode(false);
+      }
+    } catch (err) {
+      console.warn('Failed to check existing submission:', err);
+      setExistingData(null);
+      setExistingRowIndex(undefined);
+      setIsUpdateMode(false);
+    } finally {
+      setIsCheckingSubmission(false);
+      setStep('form');
+    }
+  }, []);
+
   // When user selects a name from Master
   const handleNameSelect = useCallback((participant: MasterParticipant) => {
     setSelectedName(participant['NAMA LENGKAP']);
     setSelectedMasterData(participant);
     setIsFromMaster(true);
     setSubmitError(null);
-    setStep('form');
-  }, []);
+    checkAndProceed(participant['NAMA LENGKAP']);
+  }, [checkAndProceed]);
 
   // When user skips (name not in Master)
-  const handleSkip = useCallback(() => {
-    setSelectedName('');
+  const handleSkip = useCallback((searchQuery?: string) => {
+    const manualName = searchQuery?.trim() || '';
+    setSelectedName(manualName);
     setSelectedMasterData(null);
     setIsFromMaster(false);
     setSubmitError(null);
-    setStep('form');
+
+    if (manualName) {
+      checkAndProceed(manualName);
+    } else {
+      setExistingData(null);
+      setExistingRowIndex(undefined);
+      setIsUpdateMode(false);
+      setStep('form');
+    }
+  }, [checkAndProceed]);
+
+  // When manual-entry user clicks "Cek Data" to check response spreadsheet
+  const handleCheckExisting = useCallback(async (name: string) => {
+    setIsCheckingExisting(true);
+    try {
+      const result = await fetchExistingSubmission(name);
+      if (result.submitted && result.data) {
+        setExistingData(result.data);
+        setExistingRowIndex(result.rowIndex);
+        setIsUpdateMode(true);
+        setSelectedName(name);
+      } else {
+        setExistingData(null);
+        setExistingRowIndex(undefined);
+        setIsUpdateMode(false);
+      }
+    } catch (err) {
+      console.warn('Failed to check existing submission:', err);
+      setExistingData(null);
+      setExistingRowIndex(undefined);
+      setIsUpdateMode(false);
+    } finally {
+      setIsCheckingExisting(false);
+    }
   }, []);
 
   // When form is submitted
@@ -101,7 +185,7 @@ export default function Home() {
       setSubmitError(null);
 
       try {
-        await submitData(name, fields);
+        await submitData(name, fields, undefined, isUpdateMode ? existingRowIndex : undefined);
         setUploadedUrls([]);
         setStep('success');
       } catch (err) {
@@ -112,7 +196,7 @@ export default function Home() {
         setIsSubmitting(false);
       }
     },
-    []
+    [isUpdateMode, existingRowIndex]
   );
 
   // When photos are uploaded to R2 (or skipped), send data + R2 photo URLs to Google Apps Script / Spreadsheet
@@ -128,7 +212,7 @@ export default function Home() {
           ...formFields,
           'Upload Foto Bareng': urls.join('\n'),
         };
-        await submitData(selectedName, fieldsWithPhotos);
+        await submitData(selectedName, fieldsWithPhotos, undefined, isUpdateMode ? existingRowIndex : undefined);
         setFormFields(fieldsWithPhotos);
         setStep('success');
       } catch (err) {
@@ -141,7 +225,7 @@ export default function Home() {
         setIsUploading(false);
       }
     },
-    [formFields, selectedName]
+    [formFields, selectedName, isUpdateMode, existingRowIndex]
   );
 
   const handleBack = useCallback(() => {
@@ -149,6 +233,9 @@ export default function Home() {
     setSelectedName('');
     setSelectedMasterData(null);
     setSubmitError(null);
+    setExistingData(null);
+    setExistingRowIndex(undefined);
+    setIsUpdateMode(false);
   }, []);
 
   const handleBackToForm = useCallback(() => {
@@ -165,6 +252,9 @@ export default function Home() {
     setUploadedUrls([]);
     setSubmitError(null);
     setUploadError(null);
+    setExistingData(null);
+    setExistingRowIndex(undefined);
+    setIsUpdateMode(false);
   }, []);
 
   // Step number for the indicator
@@ -216,6 +306,14 @@ export default function Home() {
             </div>
           )}
 
+          {/* Checking submission state */}
+          {isCheckingSubmission && (
+            <div className="loading-container">
+              <div className="loading-spinner" />
+              <p className="loading-text">Memeriksa data sebelumnya...</p>
+            </div>
+          )}
+
           {/* Error state */}
           {loadError && (
             <div className="error-container">
@@ -231,7 +329,7 @@ export default function Home() {
           )}
 
           {/* Step 1: Search */}
-          {!isLoadingNames && !loadError && step === 'search' && (
+          {!isLoadingNames && !isCheckingSubmission && !loadError && step === 'search' && (
             <div className="step-content fade-in">
               <p className="step-description">{EVENT_INFO.description}</p>
               <NameSearch
@@ -259,7 +357,7 @@ export default function Home() {
           )}
 
           {/* Step 2: Form */}
-          {!isLoadingNames && !loadError && step === 'form' && (
+          {!isLoadingNames && !isCheckingSubmission && !loadError && step === 'form' && (
             <div className="step-content fade-in">
               {submitError && (
                 <div className="submit-error">
@@ -284,6 +382,11 @@ export default function Home() {
                 onBack={handleBack}
                 isSubmitting={isSubmitting}
                 isFromMaster={isFromMaster}
+                existingData={existingData}
+                isUpdateMode={isUpdateMode}
+                onCheckExisting={!isFromMaster ? handleCheckExisting : undefined}
+                isCheckingExisting={isCheckingExisting}
+                responseNames={!isFromMaster ? responseNames : undefined}
               />
             </div>
           )}
@@ -312,6 +415,7 @@ export default function Home() {
                 submittedData={formFields}
                 photoUrls={uploadedUrls}
                 onReset={handleReset}
+                isUpdateMode={isUpdateMode}
               />
             </div>
           )}
