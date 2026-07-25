@@ -281,7 +281,7 @@ export default function Home() {
       <main className="main-container">
         {/* Header */}
         <header className="app-header">
-          <div className="header-badge">{EVENT_INFO.organization}</div>
+          {/* <div className="header-badge">{EVENT_INFO.organization}</div> */}
           <h1 className="header-title">{EVENT_INFO.title}</h1>
           <p className="header-subtitle">{EVENT_INFO.subtitle}</p>
         </header>

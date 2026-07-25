@@ -4,13 +4,13 @@
 
 // Google Apps Script Web App URL
 export const APPS_SCRIPT_URL =
-  process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbxvFpSVtwe9kt_7U6TvnediDcAP0_hZZx76sI5KeDzIm6NoSAqfNTqNnFxgTmaLtHVhHQ/exec'
+  process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbz1Ur6OMXG9tUUk5ZQqUCZv7hgYF5adxc117sCtEu90Oc54GH3rRrfoAo0l6mCOuaE4yQ/exec'
 // Event / kegiatan info
 export const EVENT_INFO = {
-  title: 'Rekap Foto FST',
+  title: 'Integrated Biography Collector',
   subtitle: 'Formulir Data Peserta',
-  description: 'Silakan cari nama kamu, lalu lengkapi data yang diminta.',
-  organization: 'FST',
+  description: 'Silakan ketik / cari nama kamu, lalu lengkapi data yang diminta. Note: Data yang diambil berasal dari spreadsheet FST yang kamu isi di grup',
+  organization: 'salmanzahi',
 };
 
 // Owner / Creator Info

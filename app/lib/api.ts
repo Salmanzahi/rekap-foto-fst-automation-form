@@ -237,6 +237,32 @@ export async function fetchAllResponses(): Promise<ResponseItem[]> {
 }
 
 /**
+ * Delete a participant response and their associated photo files from R2 storage.
+ */
+export async function deleteResponseData(
+  name: string,
+  rowIndex: number,
+  photoUrls: string[] = []
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch('/api/delete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name, rowIndex, photoUrls }),
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => null);
+    throw new Error(
+      errData?.error || `Gagal menghapus data (HTTP ${response.status})`
+    );
+  }
+
+  return response.json();
+}
+
+/**
  * Submit participant data + photos via local Next.js API proxy (/api/submit).
  * When rowIndex is provided, sends an 'update' action to update an existing row.
  */

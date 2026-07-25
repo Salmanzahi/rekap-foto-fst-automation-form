@@ -27,11 +27,16 @@ function buildWaMessage(
   photoUrls: string[]
 ): string {
   let msg = `*REKAP DATA PESERTA FST*\n`;
-  msg += `-----------------------------------\n`;
+  msg += `-----------------------------------\n\n`;
+
+  // DATA 1: BIODATA RESPONDEN
+  msg += `📌 *DATA 1: BIODATA RESPONDEN*\n`;
   msg += `👤 *Nama:* ${name}\n`;
   if (submittedData['Prodi']) msg += `📚 *Prodi:* ${submittedData['Prodi']}\n`;
   if (submittedData['Kelompok']) msg += `👥 *Kelompok:* ${submittedData['Kelompok']}\n`;
-  if (submittedData['No. Telp kamu']) msg += `📞 *No. HP:* ${submittedData['No. Telp kamu']}\n`;
+  if (submittedData['No. Telp kamu'] || submittedData['No. Telp']) {
+    msg += `📞 *No. HP:* ${submittedData['No. Telp kamu'] || submittedData['No. Telp']}\n`;
+  }
   if (submittedData['Asal Daerah']) msg += `🏠 *Asal Daerah:* ${submittedData['Asal Daerah']}\n`;
   if (submittedData['Sosmed']) msg += `📱 *Sosmed:* ${submittedData['Sosmed']}\n`;
   if (submittedData['Motto']) msg += `💬 *Motto:* "${submittedData['Motto']}"\n`;
@@ -43,8 +48,18 @@ function buildWaMessage(
     });
   }
 
+  msg += `\n-----------------------------------\n\n`;
+
+  // DATA 2: BIODATA OWNER (CREATOR)
+  msg += `👨‍💻 *DATA 2: BIODATA OWNER (CREATOR)*\n`;
+  msg += `👤 *Nama:* ${OWNER_INFO.name}\n`;
+  msg += `📚 *Prodi:* ${OWNER_INFO.prodi}\n`;
+  msg += `👥 *Kelompok:* ${OWNER_INFO.kelompok}\n`;
+  msg += `🏠 *Asal Daerah:* ${OWNER_INFO.asalDaerah}\n`;
+  msg += `💬 *Motto:* "${OWNER_INFO.motto}"\n`;
+
   msg += `\n-----------------------------------\n`;
-  msg += `_Dikirim dari Rekap Foto FST_`;
+  msg += `_Dikirim dari Integrated Biography Collector_`;
   return msg;
 }
 

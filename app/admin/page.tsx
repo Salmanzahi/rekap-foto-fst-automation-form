@@ -2,8 +2,16 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { fetchParticipants, fetchAllResponses, fetchStats, type ResponseItem, type StatsResponse } from '../lib/api';
-import { EVENT_INFO, type MasterParticipant } from '../lib/config';
+import {
+  fetchParticipants,
+  fetchAllResponses,
+  fetchStats,
+  submitData,
+  deleteResponseData,
+  type ResponseItem,
+  type StatsResponse,
+} from '../lib/api';
+import { EVENT_INFO, OWNER_INFO, type MasterParticipant } from '../lib/config';
 import { DEFAULT_PRODI_LIST, normalizeProdi } from '../lib/prodi';
 
 const TARGET_TOTAL = 80;
@@ -41,6 +49,42 @@ function formatWaPhone(phone: string): string {
   return cleaned;
 }
 
+function buildAdminWaMsg(r: ResponseItem): string {
+  let msg = `*REKAP DATA PESERTA FST*\n`;
+  msg += `-----------------------------------\n\n`;
+
+  // DATA 1: BIODATA RESPONDEN
+  msg += `📌 *DATA 1: BIODATA RESPONDEN*\n`;
+  msg += `👤 *Nama:* ${r.name}\n`;
+  if (r.prodi) msg += `📚 *Prodi:* ${r.prodi}\n`;
+  if (r.kelompok) msg += `👥 *Kelompok:* ${r.kelompok}\n`;
+  if (r.phone) msg += `📞 *No. HP:* ${r.phone}\n`;
+  if (r.asalDaerah) msg += `🏠 *Asal Daerah:* ${r.asalDaerah}\n`;
+  if (r.sosmed) msg += `📱 *Sosmed:* ${r.sosmed}\n`;
+  if (r.motto) msg += `💬 *Motto:* "${r.motto}"\n`;
+
+  if (r.photoUrls && r.photoUrls.length > 0) {
+    msg += `\n🖼️ *Link Foto Upload (${r.photoUrls.length}):*\n`;
+    r.photoUrls.forEach((url, i) => {
+      msg += `${i + 1}. ${url}\n`;
+    });
+  }
+
+  msg += `\n-----------------------------------\n\n`;
+
+  // DATA 2: BIODATA OWNER (CREATOR)
+  msg += `👨‍💻 *DATA 2: BIODATA OWNER (CREATOR)*\n`;
+  msg += `👤 *Nama:* ${OWNER_INFO.name}\n`;
+  msg += `📚 *Prodi:* ${OWNER_INFO.prodi}\n`;
+  msg += `👥 *Kelompok:* ${OWNER_INFO.kelompok}\n`;
+  msg += `🏠 *Asal Daerah:* ${OWNER_INFO.asalDaerah}\n`;
+  msg += `💬 *Motto:* "${OWNER_INFO.motto}"\n`;
+
+  msg += `\n-----------------------------------\n`;
+  msg += `_Dikirim via Admin Analytics_`;
+  return msg;
+}
+
 export default function AdminAnalyticsPage() {
   const [participants, setParticipants] = useState<MasterParticipant[]>([]);
   const [responses, setResponses] = useState<ResponseItem[]>([]);
@@ -48,10 +92,22 @@ export default function AdminAnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Status Notice Toast
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProdi, setFilterProdi] = useState('ALL');
   const [filterFoto, setFilterFoto] = useState('ALL');
+
+  // Edit Modal State
+  const [editingItem, setEditingItem] = useState<ResponseItem | null>(null);
+  const [editFields, setEditFields] = useState<Record<string, string>>({});
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Delete Modal State
+  const [deletingItem, setDeletingItem] = useState<ResponseItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -75,6 +131,78 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Show auto-dismiss notice
+  const showNotice = (type: 'success' | 'error', message: string) => {
+    setNotice({ type, message });
+    setTimeout(() => {
+      setNotice(null);
+    }, 4000);
+  };
+
+  // Open Edit Modal
+  const handleOpenEdit = (item: ResponseItem) => {
+    setEditingItem(item);
+    setEditFields({
+      name: item.name,
+      'No. Telp kamu': item.phone || '',
+      Prodi: normalizeProdi(item.prodi),
+      Kelompok: item.kelompok || '',
+      'Asal Daerah': item.asalDaerah || '',
+      Sosmed: item.sosmed || '',
+      Motto: item.motto || '',
+      'Apakah sudah Foto Bareng': item.fotoBareng ? 'TRUE' : 'FALSE',
+    });
+  };
+
+  // Submit Edit
+  const handleSaveEdit = async () => {
+    if (!editingItem) return;
+    setIsSavingEdit(true);
+    try {
+      await submitData(
+        editingItem.name,
+        editFields,
+        undefined,
+        editingItem.rowNumber
+      );
+      showNotice('success', `Data responden ${editingItem.name} berhasil diperbarui.`);
+      setEditingItem(null);
+      await loadData();
+    } catch (err) {
+      showNotice('error', err instanceof Error ? err.message : 'Gagal memperbarui data.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Open Delete Modal
+  const handleOpenDelete = (item: ResponseItem) => {
+    setDeletingItem(item);
+  };
+
+  // Confirm Delete
+  const handleConfirmDelete = async () => {
+    if (!deletingItem) return;
+    setIsDeleting(true);
+    try {
+      await deleteResponseData(
+        deletingItem.name,
+        deletingItem.rowNumber,
+        deletingItem.photoUrls
+      );
+      showNotice(
+        'success',
+        `Data responden "${deletingItem.name}" dan ${deletingItem.photoUrls.length} foto berhasil dihapus.`
+      );
+      setDeletingItem(null);
+      await loadData();
+    } catch (err) {
+      showNotice('error', err instanceof Error ? err.message : 'Gagal menghapus data.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Summary computations
   const totalSubmissions = responses.length;
@@ -208,6 +336,13 @@ export default function AdminAnalyticsPage() {
 
   return (
     <div className="adm-container">
+      {/* Toast Notification */}
+      {notice && (
+        <div className={`adm-toast adm-toast--${notice.type} fade-in`}>
+          <span>{notice.message}</span>
+        </div>
+      )}
+
       {/* Navbar Header */}
       <header className="adm-header">
         <div className="adm-header-left">
@@ -428,6 +563,7 @@ export default function AdminAnalyticsPage() {
                   <th>Sosmed</th>
                   <th>Status Foto</th>
                   <th>Foto Upload</th>
+                  <th>Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -448,7 +584,7 @@ export default function AdminAnalyticsPage() {
                             <span className="adm-phone-num">{r.phone}</span>
                             {formatWaPhone(r.phone) ? (
                               <a
-                                href={`https://wa.me/${formatWaPhone(r.phone)}?text=${encodeURIComponent(`Halo ${r.name}, `)}`}
+                                href={`https://wa.me/${formatWaPhone(r.phone)}?text=${encodeURIComponent(buildAdminWaMsg(r))}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="adm-btn-wa-chat"
@@ -493,6 +629,26 @@ export default function AdminAnalyticsPage() {
                           <span className="adm-text-muted">-</span>
                         )}
                       </td>
+                      <td className="cell-actions">
+                        <div className="adm-action-buttons">
+                          <button
+                            type="button"
+                            className="adm-action-btn adm-action-btn--edit"
+                            onClick={() => handleOpenEdit(r)}
+                            title="Edit Data Responden"
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="adm-action-btn adm-action-btn--delete"
+                            onClick={() => handleOpenDelete(r)}
+                            title="Hapus Responden & Foto"
+                          >
+                            🗑️ Hapus
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -501,6 +657,192 @@ export default function AdminAnalyticsPage() {
           )}
         </div>
       </section>
+
+      {/* Edit Modal Dialog */}
+      {editingItem && (
+        <div className="adm-modal-overlay fade-in">
+          <div className="adm-modal">
+            <div className="adm-modal-header">
+              <h3>Edit Data Responden</h3>
+              <button type="button" className="adm-modal-close" onClick={() => setEditingItem(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="adm-modal-body">
+              <div className="adm-form-group">
+                <label>Nama Peserta</label>
+                <input
+                  type="text"
+                  value={editFields['name'] || ''}
+                  onChange={(e) => setEditFields({ ...editFields, name: e.target.value })}
+                  className="adm-input"
+                />
+              </div>
+
+              <div className="adm-form-row">
+                <div className="adm-form-group">
+                  <label>Prodi</label>
+                  <select
+                    value={editFields['Prodi'] || ''}
+                    onChange={(e) => setEditFields({ ...editFields, Prodi: e.target.value })}
+                    className="adm-input"
+                  >
+                    {DEFAULT_PRODI_LIST.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="adm-form-group">
+                  <label>Kelompok</label>
+                  <input
+                    type="text"
+                    value={editFields['Kelompok'] || ''}
+                    onChange={(e) => setEditFields({ ...editFields, Kelompok: e.target.value })}
+                    className="adm-input"
+                  />
+                </div>
+              </div>
+
+              <div className="adm-form-row">
+                <div className="adm-form-group">
+                  <label>No. HP (Telp)</label>
+                  <input
+                    type="tel"
+                    value={editFields['No. Telp kamu'] || ''}
+                    onChange={(e) => setEditFields({ ...editFields, 'No. Telp kamu': e.target.value })}
+                    className="adm-input"
+                  />
+                </div>
+
+                <div className="adm-form-group">
+                  <label>Asal Daerah</label>
+                  <input
+                    type="text"
+                    value={editFields['Asal Daerah'] || ''}
+                    onChange={(e) => setEditFields({ ...editFields, 'Asal Daerah': e.target.value })}
+                    className="adm-input"
+                  />
+                </div>
+              </div>
+
+              <div className="adm-form-row">
+                <div className="adm-form-group">
+                  <label>Sosmed (Instagram/DLL)</label>
+                  <input
+                    type="text"
+                    value={editFields['Sosmed'] || ''}
+                    onChange={(e) => setEditFields({ ...editFields, Sosmed: e.target.value })}
+                    className="adm-input"
+                  />
+                </div>
+
+                <div className="adm-form-group">
+                  <label>Status Foto Bareng</label>
+                  <select
+                    value={editFields['Apakah sudah Foto Bareng'] || 'FALSE'}
+                    onChange={(e) =>
+                      setEditFields({ ...editFields, 'Apakah sudah Foto Bareng': e.target.value })
+                    }
+                    className="adm-input"
+                  >
+                    <option value="TRUE">✓ Sudah Foto Bareng</option>
+                    <option value="FALSE">Belum Foto Bareng</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="adm-form-group">
+                <label>Motto</label>
+                <textarea
+                  value={editFields['Motto'] || ''}
+                  onChange={(e) => setEditFields({ ...editFields, Motto: e.target.value })}
+                  className="adm-input adm-textarea"
+                  rows={2}
+                />
+              </div>
+            </div>
+            <div className="adm-modal-footer">
+              <button
+                type="button"
+                className="adm-btn adm-btn-secondary"
+                onClick={() => setEditingItem(null)}
+                disabled={isSavingEdit}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="adm-btn adm-btn-primary"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? 'Menyimpan...' : 'Simpan Perubahan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal Dialog */}
+      {deletingItem && (
+        <div className="adm-modal-overlay fade-in">
+          <div className="adm-modal adm-modal--sm">
+            <div className="adm-modal-header">
+              <h3>Konfirmasi Hapus Responden</h3>
+              <button type="button" className="adm-modal-close" onClick={() => setDeletingItem(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="adm-modal-body">
+              <p className="adm-delete-warning">
+                Apakah Anda yakin ingin menghapus data responden <strong>{deletingItem.name}</strong>?
+              </p>
+              <div className="adm-delete-info-card">
+                <div className="adm-delete-info-row">
+                  <span>Prodi:</span>
+                  <strong>{deletingItem.prodi}</strong>
+                </div>
+                <div className="adm-delete-info-row">
+                  <span>Kelompok:</span>
+                  <strong>{deletingItem.kelompok || '-'}</strong>
+                </div>
+                <div className="adm-delete-info-row">
+                  <span>Foto Terunggah:</span>
+                  <strong>
+                    {deletingItem.photoUrls.length > 0
+                      ? `${deletingItem.photoUrls.length} file di R2 Storage (akan terhapus)`
+                      : 'Tidak ada foto'}
+                  </strong>
+                </div>
+              </div>
+              <span className="adm-delete-note">
+                ⚠️ Tindakan ini akan menghapus baris dari Google Spreadsheet dan menghapus file foto dari Cloudflare R2 secara permanen.
+              </span>
+            </div>
+            <div className="adm-modal-footer">
+              <button
+                type="button"
+                className="adm-btn adm-btn-secondary"
+                onClick={() => setDeletingItem(null)}
+                disabled={isDeleting}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="adm-btn adm-btn-danger"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Menghapus...' : '🗑️ Ya, Hapus Permanen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
