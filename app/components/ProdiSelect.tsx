@@ -129,7 +129,7 @@ export default function ProdiSelect({
           type="text"
           className={`form-input prodi-input ${hasError ? 'field-error' : ''}`}
           placeholder={placeholder}
-          value={query}
+          value={query ?? ''}
           onChange={(e) => {
             const val = e.target.value;
             setQuery(val);

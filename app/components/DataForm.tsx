@@ -228,7 +228,7 @@ export default function DataForm({
           <select
             id={`field-${field.name}`}
             className={`form-select ${hasError ? 'field-error' : ''}`}
-            value={formData[field.name]}
+            value={formData[field.name] ?? ''}
             onChange={(e) => handleChange(field.name, e.target.value)}
             disabled={isSubmitting}
           >
@@ -257,7 +257,7 @@ export default function DataForm({
             id={`field-${field.name}`}
             className={`form-textarea ${hasError ? 'field-error' : ''}`}
             placeholder={field.placeholder}
-            value={formData[field.name]}
+            value={formData[field.name] ?? ''}
             onChange={(e) => handleChange(field.name, e.target.value)}
             disabled={isSubmitting}
             rows={3}
@@ -280,7 +280,7 @@ export default function DataForm({
             {!isFromExisting && isPrefilled && <span className="prefilled-badge">dari data rekap FST</span>}
           </label>
           <ProdiSelect
-            value={formData[field.name] || ''}
+            value={formData[field.name] ?? ''}
             onChange={(val) => handleChange(field.name, val)}
             disabled={isSubmitting}
             hasError={hasError}
@@ -308,7 +308,7 @@ export default function DataForm({
           type={field.type}
           className={`form-input ${hasError ? 'field-error' : ''} ${isPrefilled || isFromExisting ? 'prefilled' : ''}`}
           placeholder={field.placeholder}
-          value={formData[field.name]}
+          value={formData[field.name] ?? ''}
           onChange={(e) => handleChange(field.name, e.target.value)}
           disabled={isSubmitting}
         />
@@ -374,7 +374,7 @@ export default function DataForm({
                 type="text"
                 className={`form-input ${errors['_name'] ? 'field-error' : ''}`}
                 placeholder="Ketik nama untuk mencari..."
-                value={name}
+                value={name ?? ''}
                 onChange={(e) => {
                   const val = e.target.value;
                   setName(val);

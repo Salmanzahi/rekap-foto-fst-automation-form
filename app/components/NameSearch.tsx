@@ -147,7 +147,7 @@ export default function NameSearch({
           type="text"
           className="search-input"
           placeholder="Ketik nama untuk mencari..."
-          value={query}
+          value={query ?? ''}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => {
