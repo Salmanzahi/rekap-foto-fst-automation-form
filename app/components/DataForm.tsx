@@ -19,6 +19,30 @@ interface DataFormProps {
   responseNames?: string[];
 }
 
+function buildInitialFormData(
+  masterData?: MasterParticipant | null,
+  existingData?: Record<string, string> | null
+): Record<string, string> {
+  const initial: Record<string, string> = {};
+  FORM_FIELDS.forEach((field) => {
+    let val = '';
+    // Priority: existingData > masterData > default
+    if (existingData && existingData[field.name]) {
+      val = existingData[field.name];
+    } else if (field.prefillFromMaster && masterData && masterData[field.prefillFromMaster]) {
+      val = masterData[field.prefillFromMaster];
+    } else if (field.type === 'toggle') {
+      val = 'FALSE';
+    }
+
+    if (field.name === 'Prodi' && val) {
+      val = normalizeProdi(val);
+    }
+    initial[field.name] = val;
+  });
+  return initial;
+}
+
 export default function DataForm({
   selectedName,
   masterData,
@@ -32,12 +56,27 @@ export default function DataForm({
   isCheckingExisting,
   responseNames,
 }: DataFormProps) {
+  const [prevProps, setPrevProps] = useState({ selectedName, masterData, existingData });
+  const [formData, setFormData] = useState<Record<string, string>>(() =>
+    buildInitialFormData(masterData, existingData)
+  );
   const [name, setName] = useState(selectedName);
-  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [nameQuery, setNameQuery] = useState(selectedName);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Sync state during render when props change (eliminates useEffect setState cascading renders)
+  if (
+    prevProps.selectedName !== selectedName ||
+    prevProps.masterData !== masterData ||
+    prevProps.existingData !== existingData
+  ) {
+    setPrevProps({ selectedName, masterData, existingData });
+    setFormData(buildInitialFormData(masterData, existingData));
+    setName(selectedName);
+    setNameQuery(selectedName);
+  }
+
   // Autocomplete state for manual name entry
-  const [nameQuery, setNameQuery] = useState('');
   const [filteredNames, setFilteredNames] = useState<string[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -45,30 +84,6 @@ export default function DataForm({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameContainerRef = useRef<HTMLDivElement>(null);
   const nameListRef = useRef<HTMLUListElement>(null);
-
-  // Initialize form with pre-filled data from existing submission or Master
-  useEffect(() => {
-    const initial: Record<string, string> = {};
-    FORM_FIELDS.forEach((field) => {
-      let val = '';
-      // Priority: existingData > masterData > default
-      if (existingData && existingData[field.name]) {
-        val = existingData[field.name];
-      } else if (field.prefillFromMaster && masterData && masterData[field.prefillFromMaster]) {
-        val = masterData[field.prefillFromMaster];
-      } else if (field.type === 'toggle') {
-        val = 'FALSE';
-      }
-
-      if (field.name === 'Prodi' && val) {
-        val = normalizeProdi(val);
-      }
-      initial[field.name] = val;
-    });
-    setFormData(initial);
-    setName(selectedName);
-    setNameQuery(selectedName);
-  }, [masterData, selectedName, existingData]);
 
   const validateField = (field: FormField, value: string): string | null => {
     if (field.required && !value.trim()) {

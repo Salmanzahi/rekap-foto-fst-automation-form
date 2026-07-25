@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { MasterParticipant } from '../lib/config';
 
 interface NameSearchProps {
@@ -17,29 +17,27 @@ export default function NameSearch({
   disabled,
 }: NameSearchProps) {
   const [query, setQuery] = useState('');
-  const [filtered, setFiltered] = useState<MasterParticipant[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Filter participants based on query
-  useEffect(() => {
-    if (query.trim().length < 1) {
-      setFiltered([]);
-      setIsOpen(false);
-      return;
-    }
-
+  // Derived filtered participants based on query using useMemo
+  const filtered = useMemo(() => {
+    if (query.trim().length < 1) return [];
     const q = query.toLowerCase().trim();
-    const results = participants.filter((p) =>
+    return participants.filter((p) =>
       p['NAMA LENGKAP']?.toLowerCase().includes(q)
     );
-    setFiltered(results);
-    setIsOpen(results.length > 0);
-    setHighlightIndex(-1);
   }, [query, participants]);
+
+  // Handle query input change directly
+  const handleQueryChange = (val: string) => {
+    setQuery(val);
+    setIsOpen(val.trim().length >= 1);
+    setHighlightIndex(-1);
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -69,7 +67,6 @@ export default function NameSearch({
     (participant: MasterParticipant) => {
       setQuery(participant['NAMA LENGKAP']);
       setIsOpen(false);
-      setFiltered([]);
       onSelect(participant);
     },
     [onSelect]
@@ -148,7 +145,7 @@ export default function NameSearch({
           className="search-input"
           placeholder="Ketik nama untuk mencari..."
           value={query ?? ''}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => handleQueryChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => {
             if (filtered.length > 0) setIsOpen(true);
@@ -170,7 +167,6 @@ export default function NameSearch({
             className="search-clear"
             onClick={() => {
               setQuery('');
-              setFiltered([]);
               setIsOpen(false);
               inputRef.current?.focus();
             }}

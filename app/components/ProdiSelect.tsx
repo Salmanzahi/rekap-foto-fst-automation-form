@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { searchProdi, normalizeProdi } from '../lib/prodi';
 
 interface ProdiSelectProps {
@@ -20,31 +20,26 @@ export default function ProdiSelect({
   placeholder = 'Pilih atau ketik Prodi (misal: sisfor, tekling)...',
   customProdiList,
 }: ProdiSelectProps) {
-  const [query, setQuery] = useState(value || '');
+  const [query, setQuery] = useState(value ? normalizeProdi(value, customProdiList) : '');
+  const [prevValue, setPrevValue] = useState(value);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
-  const [filteredProdis, setFilteredProdis] = useState<string[]>([]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync external value with local query (normalized to UPPERCASE)
-  useEffect(() => {
-    if (value) {
-      const normalized = normalizeProdi(value, customProdiList);
-      setQuery(normalized);
-    } else {
-      setQuery('');
-    }
-  }, [value, customProdiList]);
+  // Sync external value with local query state during render when props change
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setQuery(value ? normalizeProdi(value, customProdiList) : '');
+  }
 
-  // Update filtered results:
-  // If query matches the currently selected value, show ALL options so user can change selection easily
-  useEffect(() => {
+  // Derive filtered prodi options dynamically via useMemo without useEffect setState
+  const filteredProdis = useMemo(() => {
     const normalizedVal = value ? normalizeProdi(value, customProdiList) : '';
     const searchQuery = (normalizedVal && query === normalizedVal) ? '' : query;
-    const results = searchProdi(searchQuery, customProdiList);
-    setFilteredProdis(results);
+    return searchProdi(searchQuery, customProdiList);
   }, [query, value, customProdiList]);
 
   // Scroll highlighted item into view
