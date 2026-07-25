@@ -6,7 +6,11 @@ const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || '';
+const R2_PUBLIC_DOMAIN =
+  process.env.R2_PUBLIC_DOMAIN ||
+  process.env.R2_PUBLIC_URL ||
+  process.env.NEXT_PUBLIC_R2_PUBLIC_DOMAIN ||
+  '';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_FILES = 5;
@@ -30,17 +34,28 @@ function getS3Client() {
   });
 }
 
+/**
+ * Sanitizes folder and file names:
+ * Replaces invalid characters AND spaces with an underscore (_).
+ * E.g. "SISTEM INFORMASI" -> "SISTEM_INFORMASI"
+ */
 function cleanString(str: string): string {
-  return str.replace(/[\/\\:*?"<>|]/g, '_').trim();
+  return str
+    .trim()
+    .replace(/[\/\\:*?"<>|\s]+/g, '_');
 }
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const files = formData.getAll('files') as File[];
-    const prodi = cleanString((formData.get('prodi') as string) || 'Lainnya');
-    const kelompok = cleanString((formData.get('kelompok') as string) || '-');
-    const name = cleanString((formData.get('name') as string) || 'Peserta');
+    const rawProdi = (formData.get('prodi') as string) || 'Lainnya';
+    const rawKelompok = (formData.get('kelompok') as string) || '-';
+    const rawName = (formData.get('name') as string) || 'Peserta';
+
+    const prodi = cleanString(rawProdi);
+    const kelompok = cleanString(rawKelompok);
+    const name = cleanString(rawName);
 
     // Validations
     if (!files || files.length === 0) {
@@ -75,6 +90,7 @@ export async function POST(request: NextRequest) {
 
     const s3Client = getS3Client();
     const uploadedUrls: string[] = [];
+    const publicDomainBase = R2_PUBLIC_DOMAIN.replace(/\/$/, '');
 
     // Upload each file with structured folder/filename
     for (let i = 0; i < files.length; i++) {
@@ -82,7 +98,7 @@ export async function POST(request: NextRequest) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       
-      // Structure: rekap-foto/[Prodi]/Kel-[Kelompok]_[Nama]_[Index].[ext]
+      // Structure: rekap-foto/[Prodi_Folder]/Kel-[Kelompok]_[Nama]_[Index].[ext]
       const key = `rekap-foto/${prodi}/Kel-${kelompok}_${name}_${i + 1}.${ext}`;
 
       await s3Client.send(
@@ -94,15 +110,19 @@ export async function POST(request: NextRequest) {
         })
       );
 
-      // Construct public URL
-      const publicUrl = R2_PUBLIC_URL
-        ? `${R2_PUBLIC_URL.replace(/\/$/, '')}/${key}`
+      // Construct public URL using custom domain from .env.local
+      const publicUrl = publicDomainBase
+        ? `${publicDomainBase}/${key}`
         : `https://${R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
 
       uploadedUrls.push(publicUrl);
     }
 
-    return NextResponse.json({ urls: uploadedUrls });
+    return NextResponse.json({
+      success: true,
+      message: `${files.length} foto berhasil diupload ke R2 Storage`,
+      urls: uploadedUrls,
+    });
   } catch (error) {
     console.error('R2 Upload error:', error);
     return NextResponse.json(
@@ -110,7 +130,7 @@ export async function POST(request: NextRequest) {
         error:
           error instanceof Error
             ? error.message
-            : 'Gagal mengupload foto ke R2 Storage. Silakan periksa kredensial R2 kamu.',
+            : 'Gagal mengupload foto ke R2 Storage.',
       },
       { status: 500 }
     );

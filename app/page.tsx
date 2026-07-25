@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { EVENT_INFO, type MasterParticipant } from './lib/config';
-import { fetchParticipants, fetchExistingSubmission, fetchResponseNames, submitData } from './lib/api';
+import { fetchParticipants, fetchExistingSubmission, fetchResponseNames, fetchStats, submitData, type StatsResponse } from './lib/api';
 import NameSearch from './components/NameSearch';
 import DataForm from './components/DataForm';
 import PhotoUpload from './components/PhotoUpload';
 import SuccessScreen from './components/SuccessScreen';
+import ProdiStats from './components/ProdiStats';
 
 type AppStep = 'search' | 'form' | 'upload' | 'success';
 
@@ -42,6 +43,8 @@ export default function Home() {
 
   // Response spreadsheet names (for manual entry autocomplete)
   const [responseNames, setResponseNames] = useState<string[]>([]);
+  // Statistics data
+  const [statsData, setStatsData] = useState<StatsResponse | null>(null);
 
   // Fetch participants on mount
   useEffect(() => {
@@ -76,18 +79,24 @@ export default function Home() {
     };
   }, []);
 
-  // Fetch response names on mount (for manual entry autocomplete)
+  // Fetch response names & stats on mount
   useEffect(() => {
     let cancelled = false;
-    async function loadResponseNames() {
+    async function loadExtraData() {
       try {
-        const names = await fetchResponseNames();
-        if (!cancelled) setResponseNames(names);
+        const [names, stats] = await Promise.all([
+          fetchResponseNames(),
+          fetchStats(),
+        ]);
+        if (!cancelled) {
+          setResponseNames(names);
+          setStatsData(stats);
+        }
       } catch {
-        // Non-critical — autocomplete just won't have data
+        // Non-critical
       }
     }
-    loadResponseNames();
+    loadExtraData();
     return () => { cancelled = true; };
   }, []);
 
@@ -331,6 +340,9 @@ export default function Home() {
           {/* Step 1: Search */}
           {!isLoadingNames && !isCheckingSubmission && !loadError && step === 'search' && (
             <div className="step-content fade-in">
+              {/* Overall & Per-Prodi Statistics */}
+              <ProdiStats participants={participants} stats={statsData} />
+
               <p className="step-description">{EVENT_INFO.description}</p>
               <NameSearch
                 participants={participants}

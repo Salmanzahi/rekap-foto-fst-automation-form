@@ -4,7 +4,7 @@
 
 // Google Apps Script Web App URL
 export const APPS_SCRIPT_URL =
-  process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycby_lFxNFV-n6_U3_VOPFVKZUt4O8i9oA4P5-fC1_36LfoSXdSKI2v2jajr6MwKerkVc9w/exec'
+  process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbxvFpSVtwe9kt_7U6TvnediDcAP0_hZZx76sI5KeDzIm6NoSAqfNTqNnFxgTmaLtHVhHQ/exec'
 // Event / kegiatan info
 export const EVENT_INFO = {
   title: 'Rekap Foto FST',

@@ -44,6 +44,36 @@ export interface ResponseNamesResponse {
   names: string[];
 }
 
+export interface ProdiStatItem {
+  submitted: number;
+  fotoBareng: number;
+}
+
+export interface StatsResponse {
+  totalSubmissions: number;
+  totalFotoBareng: number;
+  prodiStats: Record<string, ProdiStatItem>;
+}
+
+export interface ResponseItem {
+  rowNumber: number;
+  timestamp: string;
+  phone: string;
+  name: string;
+  prodi: string;
+  kelompok: string;
+  asalDaerah: string;
+  sosmed: string;
+  motto: string;
+  fotoBareng: boolean;
+  photoUrls: string[];
+}
+
+export interface AllResponsesResponse {
+  responses: ResponseItem[];
+  total: number;
+}
+
 export interface ApiError {
   error: string;
 }
@@ -146,6 +176,64 @@ export async function fetchResponseNames(): Promise<string[]> {
   }
 
   return data.names || [];
+}
+
+/**
+ * Fetch statistics data (total submitted, total foto bareng, per prodi stats) from backend.
+ */
+export async function fetchStats(): Promise<StatsResponse | null> {
+  try {
+    const response = await fetch('/api/participants?action=getStats', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      console.warn('fetchStats failed');
+      return null;
+    }
+
+    const data: StatsResponse | ApiError = await response.json();
+
+    if ('error' in data) {
+      console.warn('fetchStats error:', data.error);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    console.warn('fetchStats exception:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch all submitted responses for Admin Analytics dashboard.
+ */
+export async function fetchAllResponses(): Promise<ResponseItem[]> {
+  try {
+    const response = await fetch('/api/participants?action=getAllResponses', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      console.warn('fetchAllResponses failed');
+      return [];
+    }
+
+    const data: AllResponsesResponse | ApiError = await response.json();
+
+    if ('error' in data) {
+      console.warn('fetchAllResponses error:', data.error);
+      return [];
+    }
+
+    return data.responses || [];
+  } catch (err) {
+    console.warn('fetchAllResponses exception:', err);
+    return [];
+  }
 }
 
 /**
