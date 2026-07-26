@@ -59,8 +59,7 @@ export default function ProdiStats({ participants, stats }: ProdiStatsProps) {
 
   return (
     <div className="ps-root">
-
-      {/* ── Banner progress total ── */}
+      {/* Total Progress Banner */}
       <div className="ps-banner">
         <div className="ps-banner-left">
           <span className="ps-banner-num">{totalFotoBareng}</span>
@@ -75,35 +74,38 @@ export default function ProdiStats({ participants, stats }: ProdiStatsProps) {
         </div>
       </div>
 
-      {/* ── 3 angka kecil ── */}
+      {/* Trio Stats Summary */}
       <div className="ps-trio">
         <div className="ps-trio-item">
           <span className="ps-trio-num">{totalFotoBareng}</span>
-          <span className="ps-trio-lbl">sudah foto</span>
+          <span className="ps-trio-lbl">Sudah Foto</span>
         </div>
         <div className="ps-trio-divider" />
         <div className="ps-trio-item">
           <span className="ps-trio-num">{totalSubmissions}</span>
-          <span className="ps-trio-lbl">isi form</span>
+          <span className="ps-trio-lbl">Form Terisi</span>
         </div>
         <div className="ps-trio-divider" />
         <div className="ps-trio-item ps-trio-item--warn">
           <span className="ps-trio-num">{sisaTarget}</span>
-          <span className="ps-trio-lbl">sisa target</span>
+          <span className="ps-trio-lbl">Sisa Target</span>
         </div>
       </div>
 
-      {/* ── Toggle per-prodi ── */}
+      {/* Toggle Per-Prodi List */}
       <button
         type="button"
         className="ps-toggle"
-        onClick={() => setIsExpanded(v => !v)}
+        onClick={() => setIsExpanded((v) => !v)}
       >
-        <span>Progress per prodi</span>
+        <span>Progress Per Prodi</span>
         <svg
-          viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2"
-          width="14" height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          width="14"
+          height="14"
           className={`ps-chevron${isExpanded ? ' open' : ''}`}
         >
           <polyline points="6 9 12 15 18 9" />
@@ -113,18 +115,22 @@ export default function ProdiStats({ participants, stats }: ProdiStatsProps) {
       {isExpanded && (
         <div className="ps-prodi-list fade-in">
           {prodiDetails.map((item) => (
-            <div key={item.name} className={`ps-prodi-row${item.reached ? ' ps-prodi-row--done' : ''}`}>
+            <div
+              key={item.name}
+              className={`ps-prodi-row${item.reached ? ' ps-prodi-row--done' : ''}`}
+            >
               <div className="ps-prodi-meta">
                 <span className="ps-prodi-name">
                   {PRODI_SHORT[item.name] ?? item.name}
-                  {item.reached && <span className="ps-check">✓</span>}
+                  {item.reached && <span className="ps-check">Selesai</span>}
                 </span>
                 <div className="ps-prodi-counts">
                   <span className="ps-prodi-count">
-                    {item.fotoBareng}<span className="ps-prodi-target">/{TARGET_PER_PRODI} foto</span>
+                    {item.fotoBareng}
+                    <span className="ps-prodi-target">/{TARGET_PER_PRODI} foto</span>
                   </span>
                   <span className="ps-prodi-booked-tag">
-                    {item.submitted} booked
+                    {item.submitted} form
                   </span>
                 </div>
               </div>
@@ -138,11 +144,13 @@ export default function ProdiStats({ participants, stats }: ProdiStatsProps) {
 
               <div className="ps-prodi-footer">
                 {!item.reached ? (
-                  <span className="ps-prodi-sisa">kurang {item.sisa} foto</span>
+                  <span className="ps-prodi-sisa">Sisa {item.sisa} foto</span>
                 ) : (
-                  <span className="ps-prodi-done-lbl">kuota foto terpenuhi</span>
+                  <span className="ps-prodi-done-lbl">Target Terpenuhi</span>
                 )}
-                <span className="ps-prodi-booked-detail">Total {item.submitted} form terisi</span>
+                <span className="ps-prodi-booked-detail">
+                  {item.submitted} form terisi
+                </span>
               </div>
             </div>
           ))}
