@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FORM_FIELDS, type FormField, type MasterParticipant } from '../lib/config';
+import { FORM_FIELDS, type FormField, type MasterParticipant, getProdiCapacityInfo, getTotalCapacityInfo } from '../lib/config';
 import ProdiSelect from './ProdiSelect';
 import { normalizeProdi } from '../lib/prodi';
+import type { StatsResponse } from '../lib/api';
 
 interface DataFormProps {
   selectedName: string;
@@ -17,6 +18,7 @@ interface DataFormProps {
   onCheckExisting?: (name: string) => void;
   isCheckingExisting?: boolean;
   responseNames?: string[];
+  statsData?: StatsResponse | null;
 }
 
 function buildInitialFormData(
@@ -55,6 +57,7 @@ export default function DataForm({
   onCheckExisting,
   isCheckingExisting,
   responseNames,
+  statsData,
 }: DataFormProps) {
   const [prevProps, setPrevProps] = useState({ selectedName, masterData, existingData });
   const [formData, setFormData] = useState<Record<string, string>>(() =>
@@ -63,6 +66,10 @@ export default function DataForm({
   const [name, setName] = useState(selectedName);
   const [nameQuery, setNameQuery] = useState(selectedName);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const totalCapInfo = getTotalCapacityInfo(statsData ?? null);
+  const selectedProdiName = formData['Prodi'] || '';
+  const prodiCapInfo = selectedProdiName ? getProdiCapacityInfo(selectedProdiName, statsData ?? null) : null;
 
   // Sync state during render when props change (eliminates useEffect setState cascading renders)
   if (
@@ -293,6 +300,12 @@ export default function DataForm({
             {field.required && <span className="required-mark">*</span>}
             {isFromExisting && <span className="prefilled-badge update-badge">data sebelumnya</span>}
             {!isFromExisting && isPrefilled && <span className="prefilled-badge">dari data rekap FST</span>}
+            {prodiCapInfo && prodiCapInfo.isFull && (
+              <span className="prefilled-badge cap-full-badge">⚠️ Kuota Penuh</span>
+            )}
+            {prodiCapInfo && prodiCapInfo.isWarning && !prodiCapInfo.isFull && (
+              <span className="prefilled-badge cap-warn-badge">⚡ Hampir Penuh</span>
+            )}
           </label>
           <ProdiSelect
             value={formData[field.name] ?? ''}
@@ -300,8 +313,39 @@ export default function DataForm({
             disabled={isSubmitting}
             hasError={hasError}
             placeholder={field.placeholder || 'Pilih / ketik Prodi (misal: sisfor, tekling)...'}
+            stats={statsData}
           />
-          {field.helperText && !hasError && (
+          {prodiCapInfo && prodiCapInfo.isFull && (
+            <div className="prodi-cap-warning-box full fade-in">
+              <div className="cap-warning-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <strong>Peringatan Kuota Terpenuhi ({prodiCapInfo.count}/{prodiCapInfo.target})</strong>
+              </div>
+              <p>
+                Kuota pendaftaran untuk prodi <strong>{normalizeProdi(selectedProdiName)}</strong> telah mencapai kapasitas maksimal ({prodiCapInfo.count}/{prodiCapInfo.target} foto bareng). Pendaftaran baru tetap tercatat namun masuk antrean.
+              </p>
+            </div>
+          )}
+          {prodiCapInfo && prodiCapInfo.isWarning && !prodiCapInfo.isFull && (
+            <div className="prodi-cap-warning-box warning fade-in">
+              <div className="cap-warning-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <strong>Kuota Prodi Hampir Penuh ({prodiCapInfo.count}/{prodiCapInfo.target})</strong>
+              </div>
+              <p>
+                Tersisa {prodiCapInfo.target - prodiCapInfo.count} slot foto bareng lagi untuk prodi <strong>{normalizeProdi(selectedProdiName)}</strong>.
+              </p>
+            </div>
+          )}
+          {field.helperText && !hasError && !prodiCapInfo?.isFull && !prodiCapInfo?.isWarning && (
             <p className="helper-text">{field.helperText}</p>
           )}
           {hasError && <p className="error-text">{errors[field.name]}</p>}
@@ -337,6 +381,34 @@ export default function DataForm({
 
   return (
     <div className="data-form-container">
+      {/* Total capacity warning banner */}
+      {totalCapInfo.isFull && (
+        <div className="total-cap-banner full fade-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <div className="total-cap-text">
+            <strong>Peringatan Kapasitas Total FST Terpenuhi ({totalCapInfo.count}/{totalCapInfo.target})</strong>
+            <span>Kuota target foto bareng FST sudah mencapai batas maksimal.</span>
+          </div>
+        </div>
+      )}
+      {totalCapInfo.isWarning && !totalCapInfo.isFull && (
+        <div className="total-cap-banner warning fade-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div className="total-cap-text">
+            <strong>Peringatan Kuota Total FST ({totalCapInfo.count}/{totalCapInfo.target})</strong>
+            <span>Kuota foto bareng FST hampir memenuhi target maksimal.</span>
+          </div>
+        </div>
+      )}
+
       {/* Update mode banner */}
       {isUpdateMode && (
         <div className="update-banner">
@@ -516,30 +588,23 @@ export default function DataForm({
 
         {FORM_FIELDS.map(renderField)}
 
-        {/* Show hint about foto upload */}
-        {showFotoUpload && (
-          <div className="foto-hint">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-              <circle cx="9" cy="9" r="2" />
-              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-            </svg>
-            <span>Upload foto akan dilakukan di langkah berikutnya</span>
-          </div>
-        )}
+        <div className="foto-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+            <circle cx="9" cy="9" r="2" />
+            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+          </svg>
+          <span>Langkah berikutnya: Upload foto bareng (dapat dilewati jika belum foto)</span>
+        </div>
 
         <button type="submit" className="btn-submit" disabled={isSubmitting}>
           {isSubmitting ? (
             <span className="btn-loading">
               <span className="spinner" />
-              {isUpdateMode ? 'Memperbarui...' : 'Mengirim...'}
+              Memproses...
             </span>
-          ) : showFotoUpload ? (
-            'Lanjut ke Upload Foto →'
-          ) : isUpdateMode ? (
-            '✏️ Perbarui Data'
           ) : (
-            'Kirim Data'
+            'Lanjut ke Upload Foto →'
           )}
         </button>
       </form>

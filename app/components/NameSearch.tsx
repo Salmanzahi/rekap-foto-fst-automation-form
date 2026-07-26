@@ -184,7 +184,7 @@ export default function NameSearch({
         )}
       </div>
 
-      {isOpen && (
+      {isOpen && filtered.length > 0 && (
         <ul
           ref={listRef}
           id="name-search-listbox"

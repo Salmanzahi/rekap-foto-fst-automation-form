@@ -113,12 +113,6 @@ export const FORM_FIELDS: FormField[] = [
     placeholder: 'Motto hidup kamu...',
     prefillFromMaster: 'MOTTO',
   },
-  {
-    name: 'Apakah sudah Foto Bareng',
-    label: 'Apakah sudah Foto Bareng?',
-    type: 'toggle',
-    required: false,
-  },
 ];
 
 // ============================================
@@ -130,3 +124,61 @@ export const UPLOAD_CONFIG = {
   acceptedTypes: ['image/jpeg', 'image/png', 'image/webp'],
   acceptedExtensions: '.jpg,.jpeg,.png,.webp',
 };
+
+// ============================================
+// Form Admission Capacity Config & Status
+// ============================================
+export const CAPACITY_CONFIG = {
+  targetTotal: 80,
+  targetPerProdi: 10,
+  warningThresholdRatio: 0.8, // 80% capacity triggers warning status (8/10 per prodi, 64/80 total)
+};
+
+export interface CapacityStatus {
+  count: number;          // foto bareng count
+  submittedCount: number; // form booked / submitted count
+  target: number;
+  pct: number;
+  isWarning: boolean;
+  isFull: boolean;
+}
+
+export function getProdiCapacityInfo(
+  prodiInput: string,
+  stats: { prodiStats?: Record<string, { submitted: number; fotoBareng: number }> } | null
+): CapacityStatus {
+  const target = CAPACITY_CONFIG.targetPerProdi;
+  let count = 0;
+  let submittedCount = 0;
+
+  if (prodiInput && stats?.prodiStats) {
+    const cleanInput = prodiInput.trim().toUpperCase();
+    Object.entries(stats.prodiStats).forEach(([key, val]) => {
+      const cleanKey = key.trim().toUpperCase();
+      if (cleanKey === cleanInput || cleanKey.includes(cleanInput) || cleanInput.includes(cleanKey)) {
+        count += val.fotoBareng || 0;
+        submittedCount += val.submitted || 0;
+      }
+    });
+  }
+
+  const pct = Math.min(100, Math.round((count / target) * 100));
+  const isFull = count >= target;
+  const isWarning = !isFull && count >= Math.floor(target * CAPACITY_CONFIG.warningThresholdRatio);
+
+  return { count, submittedCount, target, pct, isWarning, isFull };
+}
+
+export function getTotalCapacityInfo(
+  stats: { totalFotoBareng?: number; totalSubmissions?: number } | null
+): CapacityStatus {
+  const target = CAPACITY_CONFIG.targetTotal;
+  const count = stats?.totalFotoBareng || 0;
+  const submittedCount = stats?.totalSubmissions || 0;
+  const pct = Math.min(100, Math.round((count / target) * 100));
+  const isFull = count >= target;
+  const isWarning = !isFull && count >= Math.floor(target * CAPACITY_CONFIG.warningThresholdRatio);
+
+  return { count, submittedCount, target, pct, isWarning, isFull };
+}
+

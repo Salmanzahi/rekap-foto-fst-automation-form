@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { EVENT_INFO, type MasterParticipant } from './lib/config';
 import { fetchParticipants, fetchExistingSubmission, fetchResponseNames, fetchStats, submitData, type StatsResponse } from './lib/api';
 import NameSearch from './components/NameSearch';
@@ -177,38 +177,26 @@ export default function Home() {
     }
   }, []);
 
-  // When form is submitted
+  // When form is submitted, proceed to photo upload step (Step 3)
   const handleFormSubmit = useCallback(
     async (name: string, fields: Record<string, string>) => {
       setSelectedName(name);
       setFormFields(fields);
-
-      // If user wants to upload photos, go to upload step
-      if (fields['Apakah sudah Foto Bareng'] === 'TRUE') {
-        setStep('upload');
-        return;
-      }
-
-      // Otherwise submit directly without photos
-      setIsSubmitting(true);
-      setSubmitError(null);
-
-      try {
-        await submitData(name, fields, undefined, isUpdateMode ? existingRowIndex : undefined);
-        setUploadedUrls([]);
-        setStep('success');
-      } catch (err) {
-        setSubmitError(
-          err instanceof Error ? err.message : 'Gagal mengirim data.'
-        );
-      } finally {
-        setIsSubmitting(false);
-      }
+      setStep('upload');
     },
-    [isUpdateMode, existingRowIndex]
+    []
   );
 
-  // When photos are uploaded to R2 (or skipped), send data + R2 photo URLs to Google Apps Script / Spreadsheet
+  // Extract existing photo URLs from existing submission data
+  const existingPhotoUrls = useMemo(() => {
+    if (!existingData || !existingData['Upload Foto Bareng']) return [];
+    return existingData['Upload Foto Bareng']
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith('http://') || s.startsWith('https://'));
+  }, [existingData]);
+
+  // When photos are uploaded to R2 (or skipped), send data + photo status to Spreadsheet
   const handleUploadComplete = useCallback(
     async (urls: string[]) => {
       setUploadedUrls(urls);
@@ -217,9 +205,12 @@ export default function Home() {
       setUploadError(null);
 
       try {
+        const combinedPhotoUrls = Array.from(new Set([...urls, ...existingPhotoUrls]));
+        const hasPhotos = combinedPhotoUrls.length > 0;
         const fieldsWithPhotos = {
           ...formFields,
-          'Upload Foto Bareng': urls.join('\n'),
+          'Apakah sudah Foto Bareng': hasPhotos ? 'TRUE' : 'FALSE',
+          'Upload Foto Bareng': combinedPhotoUrls.join('\n'),
         };
         await submitData(selectedName, fieldsWithPhotos, undefined, isUpdateMode ? existingRowIndex : undefined);
         setFormFields(fieldsWithPhotos);
@@ -234,7 +225,7 @@ export default function Home() {
         setIsUploading(false);
       }
     },
-    [formFields, selectedName, isUpdateMode, existingRowIndex]
+    [formFields, selectedName, isUpdateMode, existingRowIndex, existingPhotoUrls]
   );
 
   const handleBack = useCallback(() => {
@@ -399,6 +390,7 @@ export default function Home() {
                 onCheckExisting={!isFromMaster ? handleCheckExisting : undefined}
                 isCheckingExisting={isCheckingExisting}
                 responseNames={!isFromMaster ? responseNames : undefined}
+                statsData={statsData}
               />
             </div>
           )}
@@ -415,6 +407,8 @@ export default function Home() {
                 isUploading={isUploading}
                 setIsUploading={setIsUploading}
                 uploadError={uploadError}
+                existingPhotoUrls={existingPhotoUrls}
+                isSubmitting={isSubmitting}
               />
             </div>
           )}
@@ -426,6 +420,7 @@ export default function Home() {
                 name={selectedName}
                 submittedData={formFields}
                 photoUrls={uploadedUrls}
+                existingPhotoUrls={existingPhotoUrls}
                 onReset={handleReset}
                 isUpdateMode={isUpdateMode}
               />

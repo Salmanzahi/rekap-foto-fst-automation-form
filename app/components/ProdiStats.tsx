@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { MasterParticipant } from '../lib/config';
+import { CAPACITY_CONFIG, type MasterParticipant } from '../lib/config';
 import type { StatsResponse } from '../lib/api';
 import { DEFAULT_PRODI_LIST, normalizeProdi } from '../lib/prodi';
 
@@ -21,11 +21,11 @@ const PRODI_SHORT: Record<string, string> = {
   'STATISTIKA':        'Statistika',
 };
 
-const TARGET_TOTAL_FST = 80;
-const TARGET_PER_PRODI = 10;
-
 export default function ProdiStats({ participants, stats }: ProdiStatsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const TARGET_TOTAL_FST = CAPACITY_CONFIG.targetTotal;
+  const TARGET_PER_PRODI = CAPACITY_CONFIG.targetPerProdi;
 
   const totalMaster       = participants.length;
   const totalSubmissions  = stats?.totalSubmissions  || 0;
@@ -119,9 +119,14 @@ export default function ProdiStats({ participants, stats }: ProdiStatsProps) {
                   {PRODI_SHORT[item.name] ?? item.name}
                   {item.reached && <span className="ps-check">✓</span>}
                 </span>
-                <span className="ps-prodi-count">
-                  {item.fotoBareng}<span className="ps-prodi-target">/{TARGET_PER_PRODI}</span>
-                </span>
+                <div className="ps-prodi-counts">
+                  <span className="ps-prodi-count">
+                    {item.fotoBareng}<span className="ps-prodi-target">/{TARGET_PER_PRODI} foto</span>
+                  </span>
+                  <span className="ps-prodi-booked-tag">
+                    {item.submitted} booked
+                  </span>
+                </div>
               </div>
 
               <div className="ps-mini-track">
@@ -131,9 +136,14 @@ export default function ProdiStats({ participants, stats }: ProdiStatsProps) {
                 />
               </div>
 
-              {!item.reached && (
-                <span className="ps-prodi-sisa">kurang {item.sisa}</span>
-              )}
+              <div className="ps-prodi-footer">
+                {!item.reached ? (
+                  <span className="ps-prodi-sisa">kurang {item.sisa} foto</span>
+                ) : (
+                  <span className="ps-prodi-done-lbl">kuota foto terpenuhi</span>
+                )}
+                <span className="ps-prodi-booked-detail">Total {item.submitted} form terisi</span>
+              </div>
             </div>
           ))}
         </div>

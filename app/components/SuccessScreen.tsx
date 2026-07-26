@@ -6,6 +6,7 @@ interface SuccessScreenProps {
   name: string;
   submittedData: Record<string, string>;
   photoUrls: string[];
+  existingPhotoUrls?: string[];
   onReset: () => void;
   isUpdateMode?: boolean;
 }
@@ -67,10 +68,13 @@ export default function SuccessScreen({
   name,
   submittedData,
   photoUrls,
+  existingPhotoUrls = [],
   onReset,
   isUpdateMode,
 }: SuccessScreenProps) {
-  const waMessage = buildWaMessage(name, submittedData, photoUrls);
+  // Combine all photos uniquely
+  const allDisplayPhotos = Array.from(new Set([...(photoUrls || []), ...(existingPhotoUrls || [])]));
+  const waMessage = buildWaMessage(name, submittedData, allDisplayPhotos);
   const encodedMsg = encodeURIComponent(waMessage);
 
   // Phone formatting
@@ -113,21 +117,59 @@ export default function SuccessScreen({
             <span className="sc-val">{name}</span>
           </div>
           {Object.entries(submittedData)
-            .filter(([, value]) => value && value !== 'FALSE')
+            .filter(([key, value]) => value && value !== 'FALSE' && key !== 'Upload Foto Bareng')
             .map(([key, value]) => (
               <div key={key} className="sc-row">
                 <span className="sc-label">{key}</span>
                 <span className="sc-val">{value === 'TRUE' ? '✓ Ya' : value}</span>
               </div>
             ))}
-          {photoUrls.length > 0 && (
+          {allDisplayPhotos.length > 0 && (
             <div className="sc-row">
               <span className="sc-label">Foto Bareng</span>
-              <span className="sc-val">{photoUrls.length} foto diunggah ✓</span>
+              <span className="sc-val">{allDisplayPhotos.length} foto diunggah ✓</span>
             </div>
           )}
         </div>
       </div>
+
+      {/* Photo History Gallery Section */}
+      {allDisplayPhotos.length > 0 && (
+        <div className="sc-photo-history-card fade-in">
+          <div className="sc-photo-history-head">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+            </svg>
+            <span>Histori Foto Bareng ({allDisplayPhotos.length} foto)</span>
+          </div>
+          <div className="sc-photo-history-grid">
+            {allDisplayPhotos.map((url, i) => {
+              const isNew = photoUrls.includes(url);
+              return (
+                <div key={`hist-photo-${i}`} className="sc-photo-item">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`Foto ${i + 1}`} className="sc-photo-thumbnail" />
+                  <div className="sc-photo-item-info">
+                    <span className={`sc-photo-tag ${isNew ? 'new' : 'existing'}`}>
+                      {isNew ? '✨ Baru diunggah' : '📷 Histori sebelumnya'}
+                    </span>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="sc-photo-link"
+                    >
+                      Lihat Foto ↗
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* WhatsApp Share Actions */}
       <div className="sc-wa">

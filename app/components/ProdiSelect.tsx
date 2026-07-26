@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { searchProdi, normalizeProdi } from '../lib/prodi';
+import { getProdiCapacityInfo } from '../lib/config';
+import type { StatsResponse } from '../lib/api';
 
 interface ProdiSelectProps {
   value: string;
@@ -10,6 +12,7 @@ interface ProdiSelectProps {
   hasError?: boolean;
   placeholder?: string;
   customProdiList?: string[];
+  stats?: StatsResponse | null;
 }
 
 export default function ProdiSelect({
@@ -19,6 +22,7 @@ export default function ProdiSelect({
   hasError,
   placeholder = 'Pilih atau ketik Prodi (misal: sisfor, tekling)...',
   customProdiList,
+  stats,
 }: ProdiSelectProps) {
   const [query, setQuery] = useState(value ? normalizeProdi(value, customProdiList) : '');
   const [prevValue, setPrevValue] = useState(value);
@@ -190,6 +194,7 @@ export default function ProdiSelect({
         >
           {filteredProdis.map((prodi, idx) => {
             const isSelected = prodi === value;
+            const capInfo = stats ? getProdiCapacityInfo(prodi, stats) : null;
             return (
               <li
                 key={prodi}
@@ -201,11 +206,23 @@ export default function ProdiSelect({
               >
                 <div className="prodi-item-row">
                   <span className="dropdown-item-name prodi-item-name">{prodi}</span>
-                  {isSelected && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16" className="prodi-check-icon">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
+                  <div className="prodi-item-meta">
+                    {capInfo && (
+                      <div className="prodi-cap-badges">
+                        <span className={`prodi-cap-badge ${capInfo.isFull ? 'full' : capInfo.isWarning ? 'warning' : 'normal'}`}>
+                          {capInfo.isFull ? `⚠️ Penuh (${capInfo.count}/${capInfo.target})` : capInfo.isWarning ? `⚡ ${capInfo.count}/${capInfo.target}` : `${capInfo.count}/${capInfo.target} foto`}
+                        </span>
+                        <span className="prodi-booked-badge">
+                          {capInfo.submittedCount} form
+                        </span>
+                      </div>
+                    )}
+                    {isSelected && (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16" className="prodi-check-icon">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
               </li>
             );
