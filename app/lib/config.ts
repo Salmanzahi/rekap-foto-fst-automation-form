@@ -21,6 +21,7 @@ export const OWNER_INFO = {
   asalDaerah: 'Surabaya',
   motto: 'F = ma',
   phone: process.env.NEXT_PUBLIC_OWNER_WA || '089509542780',
+  instagram: '@salmanzahi1104',
 };
 
 // ============================================

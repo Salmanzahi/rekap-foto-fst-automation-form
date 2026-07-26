@@ -78,6 +78,7 @@ function buildAdminWaMsg(r: ResponseItem): string {
   msg += `📚 *Prodi:* ${OWNER_INFO.prodi}\n`;
   msg += `👥 *Kelompok:* ${OWNER_INFO.kelompok}\n`;
   msg += `🏠 *Asal Daerah:* ${OWNER_INFO.asalDaerah}\n`;
+  if (OWNER_INFO.instagram) msg += `📱 *IG:* ${OWNER_INFO.instagram}\n`;
   msg += `💬 *Motto:* "${OWNER_INFO.motto}"\n`;
 
   msg += `\n-----------------------------------\n`;

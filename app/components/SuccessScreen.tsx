@@ -57,6 +57,7 @@ function buildWaMessage(
   msg += `📚 *Prodi:* ${OWNER_INFO.prodi}\n`;
   msg += `👥 *Kelompok:* ${OWNER_INFO.kelompok}\n`;
   msg += `🏠 *Asal Daerah:* ${OWNER_INFO.asalDaerah}\n`;
+  if (OWNER_INFO.instagram) msg += `📱 *IG:* ${OWNER_INFO.instagram}\n`;
   msg += `💬 *Motto:* "${OWNER_INFO.motto}"\n`;
 
   msg += `\n-----------------------------------\n`;
@@ -207,6 +208,19 @@ export default function SuccessScreen({
           <span>Kelompok {OWNER_INFO.kelompok}</span>
           <span className="sc-dot">•</span>
           <span>{OWNER_INFO.asalDaerah}</span>
+          {OWNER_INFO.instagram && (
+            <>
+              <span className="sc-dot">•</span>
+              <a
+                href={`https://instagram.com/${OWNER_INFO.instagram.replace('@', '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="sc-creator-ig"
+              >
+                IG: {OWNER_INFO.instagram} ↗
+              </a>
+            </>
+          )}
         </div>
         <div className="sc-creator-motto">
           &ldquo;{OWNER_INFO.motto}&rdquo;
