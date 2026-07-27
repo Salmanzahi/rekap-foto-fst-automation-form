@@ -8,6 +8,7 @@ import {
   fetchStats,
   submitData,
   deleteResponseData,
+  downloadAllPhotosZip,
   type ResponseItem,
   type StatsResponse,
 } from '../lib/api';
@@ -100,6 +101,8 @@ export default function AdminAnalyticsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProdi, setFilterProdi] = useState('ALL');
   const [filterFoto, setFilterFoto] = useState('ALL');
+  const [sortBy, setSortBy] = useState<'timestamp' | 'kelompok' | 'name' | 'prodi'>('timestamp');
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
 
   // Edit Modal State
   const [editingItem, setEditingItem] = useState<ResponseItem | null>(null);
@@ -109,6 +112,10 @@ export default function AdminAnalyticsPage() {
   // Delete Modal State
   const [deletingItem, setDeletingItem] = useState<ResponseItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // ZIP Download State
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -270,9 +277,9 @@ export default function AdminAnalyticsPage() {
       .slice(0, 5);
   }, [responses]);
 
-  // Filtered responses for data table
+  // Filtered and sorted responses for data table
   const filteredResponses = useMemo(() => {
-    return responses.filter((r) => {
+    const result = responses.filter((r) => {
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -292,7 +299,35 @@ export default function AdminAnalyticsPage() {
 
       return true;
     });
-  }, [responses, searchQuery, filterProdi, filterFoto]);
+
+    return result.sort((a, b) => {
+      if (sortBy === 'kelompok') {
+        const kelA = a.kelompok ? a.kelompok.trim() : '';
+        const kelB = b.kelompok ? b.kelompok.trim() : '';
+        const comp = kelA.localeCompare(kelB, 'id', { numeric: true, sensitivity: 'base' });
+        if (comp !== 0) return sortOrder === 'ASC' ? comp : -comp;
+        return (a.rowNumber || 0) - (b.rowNumber || 0);
+      } else if (sortBy === 'name') {
+        const comp = (a.name || '').localeCompare(b.name || '', 'id');
+        if (comp !== 0) return sortOrder === 'ASC' ? comp : -comp;
+        return (a.rowNumber || 0) - (b.rowNumber || 0);
+      } else if (sortBy === 'prodi') {
+        const comp = (a.prodi || '').localeCompare(b.prodi || '', 'id');
+        if (comp !== 0) return sortOrder === 'ASC' ? comp : -comp;
+        return (a.rowNumber || 0) - (b.rowNumber || 0);
+      } else {
+        // sortBy === 'timestamp'
+        const timeA = new Date(a.timestamp || 0).getTime();
+        const timeB = new Date(b.timestamp || 0).getTime();
+        if (isNaN(timeA) || isNaN(timeB) || timeA === timeB) {
+          return sortOrder === 'ASC'
+            ? (a.rowNumber || 0) - (b.rowNumber || 0)
+            : (b.rowNumber || 0) - (a.rowNumber || 0);
+        }
+        return sortOrder === 'ASC' ? timeA - timeB : timeB - timeA;
+      }
+    });
+  }, [responses, searchQuery, filterProdi, filterFoto, sortBy, sortOrder]);
 
   // Export CSV helper
   const handleExportCSV = () => {
@@ -335,6 +370,44 @@ export default function AdminAnalyticsPage() {
     document.body.removeChild(link);
   };
 
+  // Download ZIP helper (supports optional custom URLs array)
+  const handleDownloadZip = async (customUrls?: string[] | React.MouseEvent) => {
+    if (isDownloadingZip) return;
+    const urlsToDownload = Array.isArray(customUrls) ? customUrls : undefined;
+    const isCustom = urlsToDownload && urlsToDownload.length > 0;
+
+    setIsDownloadingZip(true);
+    showNotice(
+      'success',
+      isCustom
+        ? `⏳ Mengemas ${urlsToDownload.length} foto terpilih ke file ZIP...`
+        : '⏳ Sedang memproses dan mengemas semua foto ke file ZIP...'
+    );
+    try {
+      const blob = await downloadAllPhotosZip(urlsToDownload);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = isCustom
+        ? `rekap_foto_terpilih_${Date.now()}.zip`
+        : `rekap_foto_semua_${Date.now()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showNotice(
+        'success',
+        isCustom
+          ? `🎉 File ZIP berisi ${urlsToDownload.length} foto terpilih berhasil diunduh!`
+          : '🎉 File ZIP berisi semua foto berhasil diunduh!'
+      );
+    } catch (err) {
+      showNotice('error', err instanceof Error ? err.message : 'Gagal mengunduh file ZIP dari R2 Storage');
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
   return (
     <div className="adm-container">
       {/* Toast Notification */}
@@ -361,6 +434,15 @@ export default function AdminAnalyticsPage() {
             disabled={isLoading}
           >
             {isLoading ? 'Memuat...' : '🔄 Refresh Data'}
+          </button>
+          <button
+            type="button"
+            className="adm-btn adm-btn-accent"
+            onClick={handleDownloadZip}
+            disabled={isDownloadingZip}
+            title="Download semua file foto dari R2 Storage sebagai ZIP"
+          >
+            {isDownloadingZip ? '⏳ Mengemas ZIP...' : '📦 Download Foto (ZIP)'}
           </button>
           <button
             type="button"
@@ -411,7 +493,27 @@ export default function AdminAnalyticsPage() {
         <div className="adm-kpi-card">
           <span className="adm-kpi-label">Foto R2 Terunggah</span>
           <div className="adm-kpi-val">{totalPhotosUploaded}</div>
-          <span className="adm-kpi-sub">File foto tersimpan di CDN Cloudflare</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+            <span className="adm-kpi-sub">File di CDN Cloudflare</span>
+            <button
+              type="button"
+              onClick={handleDownloadZip}
+              disabled={isDownloadingZip || totalPhotosUploaded === 0}
+              title="Download semua foto ZIP"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--accent-600)',
+                fontWeight: 700,
+                fontSize: '12px',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                textDecoration: 'underline'
+              }}
+            >
+              {isDownloadingZip ? '⏳ Mengunduh...' : '📦 Unduh ZIP'}
+            </button>
+          </div>
         </div>
 
         <div className="adm-kpi-card">
@@ -536,8 +638,71 @@ export default function AdminAnalyticsPage() {
               <option value="YES">Sudah Foto Bareng</option>
               <option value="NO">Belum Foto Bareng</option>
             </select>
+            <select
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const [newBy, newOrder] = e.target.value.split('-') as [
+                  'timestamp' | 'kelompok' | 'name' | 'prodi',
+                  'DESC' | 'ASC'
+                ];
+                setSortBy(newBy);
+                setSortOrder(newOrder);
+              }}
+              className="adm-select-filter"
+            >
+              <option value="timestamp-DESC">📅 Waktu: Terbaru ke Terlama</option>
+              <option value="timestamp-ASC">📅 Waktu: Terlama ke Terbaru</option>
+              <option value="kelompok-ASC">👥 Kelompok: 1 ke 100 (ASC)</option>
+              <option value="kelompok-DESC">👥 Kelompok: 100 ke 1 (DESC)</option>
+              <option value="name-ASC">👤 Nama Peserta: A ke Z</option>
+              <option value="name-DESC">👤 Nama Peserta: Z ke A</option>
+              <option value="prodi-ASC">🎓 Prodi: A ke Z</option>
+              <option value="prodi-DESC">🎓 Prodi: Z ke A</option>
+            </select>
           </div>
         </div>
+
+        {/* Bulk Selection Bar */}
+        {selectedRows.length > 0 && (
+          <div className="adm-selection-bar fade-in">
+            <div className="adm-selection-info">
+              <span className="adm-selection-count">
+                ☑️ <strong>{selectedRows.length}</strong> responden terpilih
+              </span>
+              <span className="adm-selection-photos">
+                ({responses.filter((r) => selectedRows.includes(r.rowNumber)).reduce((acc, r) => acc + r.photoUrls.length, 0)} foto siap diunduh)
+              </span>
+            </div>
+            <div className="adm-selection-actions">
+              <button
+                type="button"
+                className="adm-btn adm-btn-accent"
+                onClick={() => {
+                  const urls = responses
+                    .filter((r) => selectedRows.includes(r.rowNumber))
+                    .flatMap((r) => r.photoUrls);
+                  if (urls.length === 0) {
+                    showNotice('error', '⚠️ Responden yang dipilih belum mengunggah foto ke R2 Storage!');
+                    return;
+                  }
+                  handleDownloadZip(urls);
+                }}
+                disabled={isDownloadingZip}
+                title="Unduh file ZIP untuk foto dari responden yang dipilih"
+              >
+                {isDownloadingZip ? '⏳ Mengemas ZIP...' : `📦 Download Foto Terpilih (${responses.filter((r) => selectedRows.includes(r.rowNumber)).reduce((acc, r) => acc + r.photoUrls.length, 0)} Foto)`}
+              </button>
+              <button
+                type="button"
+                className="adm-btn adm-btn-secondary"
+                onClick={() => setSelectedRows([])}
+                style={{ padding: '7px 12px', fontSize: '12.5px' }}
+              >
+                ✕ Batal Pilih
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Table */}
         <div className="adm-table-wrapper">
@@ -554,11 +719,89 @@ export default function AdminAnalyticsPage() {
             <table className="adm-table">
               <thead>
                 <tr>
+                  <th style={{ width: '40px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredResponses.length > 0 &&
+                        filteredResponses.every((r) => selectedRows.includes(r.rowNumber))
+                      }
+                      onChange={() => {
+                        const allRowNums = filteredResponses.map((r) => r.rowNumber);
+                        const isAllSelected =
+                          allRowNums.length > 0 &&
+                          allRowNums.every((id) => selectedRows.includes(id));
+                        if (isAllSelected) {
+                          setSelectedRows(
+                            selectedRows.filter((id) => !allRowNums.includes(id))
+                          );
+                        } else {
+                          setSelectedRows(
+                            Array.from(new Set([...selectedRows, ...allRowNums]))
+                          );
+                        }
+                      }}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--accent-600)' }}
+                      title="Pilih semua responden yang ditampilkan"
+                    />
+                  </th>
                   <th>#</th>
-                  <th>Timestamp</th>
-                  <th>Nama Peserta</th>
-                  <th>Prodi</th>
-                  <th>Kel.</th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === 'timestamp') {
+                        setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+                      } else {
+                        setSortBy('timestamp');
+                        setSortOrder('DESC');
+                      }
+                    }}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    title="Klik untuk mengurutkan berdasarkan waktu"
+                  >
+                    Timestamp {sortBy === 'timestamp' ? (sortOrder === 'ASC' ? '↑' : '↓') : ''}
+                  </th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === 'name') {
+                        setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+                      } else {
+                        setSortBy('name');
+                        setSortOrder('ASC');
+                      }
+                    }}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    title="Klik untuk mengurutkan berdasarkan nama"
+                  >
+                    Nama Peserta {sortBy === 'name' ? (sortOrder === 'ASC' ? '↑' : '↓') : ''}
+                  </th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === 'prodi') {
+                        setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+                      } else {
+                        setSortBy('prodi');
+                        setSortOrder('ASC');
+                      }
+                    }}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    title="Klik untuk mengurutkan berdasarkan prodi"
+                  >
+                    Prodi {sortBy === 'prodi' ? (sortOrder === 'ASC' ? '↑' : '↓') : ''}
+                  </th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === 'kelompok') {
+                        setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+                      } else {
+                        setSortBy('kelompok');
+                        setSortOrder('ASC');
+                      }
+                    }}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    title="Klik untuk mengurutkan berdasarkan kelompok"
+                  >
+                    Kel. {sortBy === 'kelompok' ? (sortOrder === 'ASC' ? '↑' : '↓') : ''}
+                  </th>
                   <th>No. HP</th>
                   <th>Asal Daerah</th>
                   <th>Sosmed</th>
@@ -571,7 +814,24 @@ export default function AdminAnalyticsPage() {
                 {filteredResponses.map((r, idx) => {
                   const hasFoto = r.fotoBareng || r.photoUrls.length > 0;
                   return (
-                    <tr key={r.rowNumber || idx}>
+                    <tr
+                      key={r.rowNumber || idx}
+                      style={selectedRows.includes(r.rowNumber) ? { background: '#f5f3ff' } : {}}
+                    >
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(r.rowNumber)}
+                          onChange={() => {
+                            if (selectedRows.includes(r.rowNumber)) {
+                              setSelectedRows(selectedRows.filter((id) => id !== r.rowNumber));
+                            } else {
+                              setSelectedRows([...selectedRows, r.rowNumber]);
+                            }
+                          }}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--accent-600)' }}
+                        />
+                      </td>
                       <td className="cell-num">{idx + 1}</td>
                       <td className="cell-time">{r.timestamp ? r.timestamp.substring(0, 16) : '-'}</td>
                       <td className="cell-name">{r.name}</td>

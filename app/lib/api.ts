@@ -330,3 +330,27 @@ export function fileToPhotoData(file: File): Promise<PhotoData> {
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Download photos from R2 storage as a ZIP file.
+ * If photoUrls array is provided, only downloads those specific photos. Otherwise downloads all.
+ */
+export async function downloadAllPhotosZip(photoUrls?: string[]): Promise<Blob> {
+  const isSelected = photoUrls && photoUrls.length > 0;
+  const response = await fetch('/api/download-zip', {
+    method: isSelected ? 'POST' : 'GET',
+    headers: isSelected ? { 'Content-Type': 'application/json' } : undefined,
+    body: isSelected ? JSON.stringify({ photoUrls }) : undefined,
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => null);
+    throw new Error(
+      errData?.error || `Gagal mengunduh file ZIP (HTTP ${response.status})`
+    );
+  }
+
+  return response.blob();
+}
+
