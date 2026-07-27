@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectCommand,
+  ListObjectsV2CommandOutput,
+} from '@aws-sdk/client-s3';
 import JSZip from 'jszip';
 
 // R2 Configuration from environment variables
@@ -86,7 +91,7 @@ async function handleDownload(request: NextRequest) {
         let continuationToken: string | undefined = undefined;
 
         while (isTruncated) {
-          const listedObjects = await s3Client.send(
+          const listedObjects: ListObjectsV2CommandOutput = await s3Client.send(
             new ListObjectsV2Command({
               Bucket: R2_BUCKET_NAME,
               Prefix: prefix,
@@ -167,7 +172,7 @@ async function handleDownload(request: NextRequest) {
     headers.set('Content-Disposition', `attachment; filename="rekap_foto_${Date.now()}.zip"`);
     headers.set('Content-Length', zipArray.byteLength.toString());
 
-    return new NextResponse(zipArray, {
+    return new NextResponse(zipArray as unknown as BodyInit, {
       status: 200,
       headers,
     });
